@@ -1,0 +1,47 @@
+name: Update surf forecasts
+
+on:
+  # GitHub cron is UTC. 09:17 UTC is about 2:17 AM Pacific during daylight time.
+  # Using :17 instead of :00 helps avoid top-of-hour GitHub Actions congestion.
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-forecasts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build spots.json from CSV
+        run: python scripts/build_spots_json.py
+
+      - name: Run forecast pipeline
+        run: python scripts/run_forecast_pipeline.py
+
+      - name: Commit updated forecast JSON
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/spots.json public/data/latest_forecasts.json public/data/site_config.json
+          if git diff --cached --quiet; then
+            echo "No forecast changes to commit."
+          else
+            git commit -m "Update surf forecast data [skip netlify]"
+            git push
+          fi
