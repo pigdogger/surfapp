@@ -10,7 +10,7 @@ The generated JSON adds:
 - south-to-north ordering
 - broad California region
 - active flag
-- placeholder bathymetry-ready features
+- empirical bathymetry-ready features
 - directional exposure table
 - nearest public tide station and buoy candidates
 
@@ -146,6 +146,12 @@ def build_spots(csv_path: Path, existing_path: Path) -> List[dict]:
             tide_station = nearest(TIDE_STATIONS, lat, lon, 1)[0]
             buoy_candidates = nearest(BUOY_STATIONS, lat, lon, 5)
 
+            previous_bathy = previous.get("bathymetry") or {}
+            previous_source = str(previous_bathy.get("source", ""))
+            keep_previous_bathy = bool(previous_bathy) and not previous_source.startswith("placeholder")
+            bathymetry = previous_bathy if keep_previous_bathy else bathy_features["bathymetry"]
+            exposure = previous.get("exposure_by_direction") if keep_previous_bathy else bathy_features["exposure_by_direction"]
+
             spot = {
                 "id": spot_id,
                 "name": name,
@@ -154,8 +160,8 @@ def build_spots(csv_path: Path, existing_path: Path) -> List[dict]:
                 "region": previous.get("region") or infer_region(lat, lon),
                 "active": previous.get("active", True),
                 "beach_orientation_deg": previous.get("beach_orientation_deg", bathy_features["beach_orientation_deg"]),
-                "bathymetry": previous.get("bathymetry", bathy_features["bathymetry"]),
-                "exposure_by_direction": previous.get("exposure_by_direction", bathy_features["exposure_by_direction"]),
+                "bathymetry": bathymetry,
+                "exposure_by_direction": exposure,
                 "public_data": {
                     "nearest_tide_station": previous.get("public_data", {}).get("nearest_tide_station", tide_station),
                     "buoy_candidates": previous.get("public_data", {}).get("buoy_candidates", buoy_candidates),

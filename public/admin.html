@@ -4,88 +4,42 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071622" />
-  <title>Surf Light Admin</title>
+  <title>CaliSurf Light Admin</title>
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="admin-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Private controls · local Stage 1 admin</p>
-        <h1>Surf Light Admin</h1>
-      </div>
-      <a class="chip" href="index.html">Open public page</a>
-    </header>
-
-    <div class="admin-grid">
-      <section class="admin-card">
-        <h2>Appearance</h2>
-        <div class="form-grid">
-          <label>Background color <input id="bgColor" type="color" value="#071622" /></label>
-          <label>Panel color <input id="panelColor" type="color" value="#0e2434" /></label>
-          <label>Accent color <input id="accentColor" type="color" value="#1bb8d4" /></label>
-          <label>Marker color <input id="accent2Color" type="color" value="#ff7f50" /></label>
-          <label>Marker size <input id="markerSize" type="range" min="8" max="24" value="13" /></label>
-          <label>Typography scale <input id="fontScale" type="range" min="0.85" max="1.25" step="0.05" value="1" /></label>
-          <label>Layout
-            <select id="layoutMode">
-              <option value="full">Full</option>
-              <option value="compact">Compact</option>
-            </select>
-          </label>
-        </div>
-        <h3>Visible cards / features</h3>
-        <div class="form-grid compact-checks">
-          <label><input id="cardSwell" type="checkbox" checked /> Swell cards</label>
-          <label><input id="cardWind" type="checkbox" checked /> Wind card</label>
-          <label><input id="cardTide" type="checkbox" checked /> Tide card</label>
-          <label><input id="cardSun" type="checkbox" checked /> Sunrise/sunset</label>
-          <label><input id="cardConfidence" type="checkbox" checked /> Confidence</label>
-          <label><input id="cardModel" type="checkbox" checked /> Model notes</label>
-          <label><input id="cardHourly" type="checkbox" checked /> Hourly sketch</label>
-          <label><input id="cardWarnings" type="checkbox" checked /> Data warnings</label>
-          <label><input id="showSwellArrows" type="checkbox" checked /> Swell arrows</label>
-          <label><input id="showWindArrows" type="checkbox" checked /> Wind arrows</label>
-          <label><input id="showBathymetry" type="checkbox" checked /> Bathymetry layer</label>
-        </div>
-        <div class="button-row">
-          <button class="primary-btn" id="saveConfig">Save to this browser</button>
-          <button class="ghost-btn" id="downloadConfig">Download site_config.json</button>
-          <button class="ghost-btn" id="resetConfig">Reset</button>
-        </div>
-        <p class="notice">Stage 1 admin saves to browser localStorage and can export a JSON file. Persistent multi-user editing later needs a write service such as Supabase, Firebase, or a GitHub write integration.</p>
-      </section>
-
-      <section class="admin-card">
-        <h2>Add a spot locally</h2>
-        <div class="form-grid">
-          <label>Name <input id="newName" placeholder="New surf spot" /></label>
-          <label>Region <input id="newRegion" placeholder="San Diego" /></label>
-          <label>Latitude <input id="newLat" type="number" step="0.000001" placeholder="32.750347" /></label>
-          <label>Longitude <input id="newLon" type="number" step="0.000001" placeholder="-117.25337" /></label>
-          <label>Beach orientation deg <input id="newOrientation" type="number" min="0" max="359" placeholder="260" /></label>
-          <label>Default exposure <input id="newExposure" type="number" step="0.1" min="0" max="2" placeholder="1.0" /></label>
-        </div>
-        <div class="button-row">
-          <button class="primary-btn" id="addSpot">Add spot to browser override</button>
-          <button class="ghost-btn" id="downloadSpots">Download spots_override.json</button>
-        </div>
-        <p class="notice">This does not edit the repo by itself. To make it permanent in Stage 1, copy the spot into california_surf_spots_full.csv or spots.json and commit it.</p>
-      </section>
-
-      <section class="admin-card">
-        <h2>Hide / show spots</h2>
-        <input id="spotFilter" placeholder="Filter spot list…" />
-        <div id="adminSpotList" class="admin-list"></div>
-      </section>
-
-      <section class="admin-card">
-        <h2>Current exported config</h2>
-        <pre id="configPreview" class="codebox"></pre>
-      </section>
-    </div>
+  <div id="loginWrap" class="login-wrap">
+    <section class="login-card">
+      <img class="app-logo" src="assets/icons/logo-white-192.png" alt="CaliSurf Light logo" />
+      <p class="eyebrow">Aesthetic console</p>
+      <h2>CaliSurf Light Admin</h2>
+      <p>This is a local static-site gate for the admin console. Full secure multi-user editing would require a real backend later.</p>
+      <label>Email <input id="loginEmail" type="email" autocomplete="username" placeholder="admin@calisurf.com" /></label>
+      <label>Password <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" /></label>
+      <button class="primary-btn" id="loginButton">Log in</button>
+      <p id="loginError" class="login-error"></p>
+    </section>
   </div>
 
+  <div id="adminShell" class="admin-shell locked">
+    <header class="topbar">
+      <div class="brand-lockup"><img class="app-logo" src="assets/icons/logo-white-192.png" alt="CaliSurf Light logo" /><div><p class="eyebrow">CaliSurf Light · west coast model V1</p><h1>Aesthetic console</h1><p class="refresh-line">Local controls. Save to browser or download site_config.json.</p></div></div>
+      <div class="button-row"><a class="chip" href="index.html">Open public page</a><button class="ghost-btn" id="logoutButton">Log out</button></div>
+    </header>
+    <div class="admin-grid">
+      <section class="admin-card"><h2>Appearance</h2><div class="form-grid">
+        <label>Background color <input id="bgColor" type="color" value="#071622" /></label><label>Panel color <input id="panelColor" type="color" value="#0e2434" /></label><label>Accent color <input id="accentColor" type="color" value="#1bb8d4" /></label><label>Marker color <input id="accent2Color" type="color" value="#ff7f50" /></label><label>Marker size <input id="markerSize" type="range" min="5" max="20" value="9" /></label><label>Typography scale <input id="fontScale" type="range" min="0.85" max="1.25" step="0.05" value="1" /></label><label>Window corner radius <input id="cornerRadius" type="range" min="4" max="28" value="12" /></label><label>Mobile edge buffer <input id="edgeBuffer" type="range" min="8" max="34" value="18" /></label><label>Default region <select id="defaultRegion"><option value="san-diego">San Diego</option><option value="orange-county">Orange County</option><option value="all">All CA</option><option value="los-angeles">Los Angeles</option><option value="central-coast">Central Coast</option><option value="bay-area">Bay Area</option></select></label><label>Layout <select id="layoutMode"><option value="full">Full</option><option value="compact">Compact</option></select></label>
+      </div><h3>Visible cards / features</h3><div class="form-grid compact-checks"><label><input id="cardSwell" type="checkbox" checked /> Swell cards</label><label><input id="cardWind" type="checkbox" checked /> Wind card</label><label><input id="cardTide" type="checkbox" checked /> Tide card</label><label><input id="cardSun" type="checkbox" checked /> Sunrise/sunset</label><label><input id="cardConfidence" type="checkbox" checked /> Confidence</label><label><input id="cardModel" type="checkbox" checked /> Model notes</label><label><input id="cardHourly" type="checkbox" checked /> Hourly sketch</label><label><input id="cardWarnings" type="checkbox" checked /> Data warnings</label><label><input id="showSwellArrows" type="checkbox" checked /> Swell arrows</label><label><input id="showWindArrows" type="checkbox" checked /> Wind arrows</label></div><div class="button-row"><button class="primary-btn" id="saveConfig">Save to this browser</button><button class="ghost-btn" id="downloadConfig">Download site_config.json</button><button class="ghost-btn" id="resetConfig">Reset</button></div><p class="notice">To make changes permanent for everyone, upload the exported site_config.json to public/data/site_config.json in GitHub.</p></section>
+      <section class="admin-card"><h2>Add a spot locally</h2><div class="form-grid"><label>Name <input id="newName" placeholder="New surf spot" /></label><label>Region <input id="newRegion" placeholder="San Diego" /></label><label>Latitude <input id="newLat" type="number" step="0.000001" placeholder="32.750347" /></label><label>Longitude <input id="newLon" type="number" step="0.000001" placeholder="-117.25337" /></label><label>Beach orientation deg <input id="newOrientation" type="number" min="0" max="359" placeholder="260" /></label><label>Default exposure <input id="newExposure" type="number" step="0.1" min="0" max="2" placeholder="1.0" /></label></div><div class="button-row"><button class="primary-btn" id="addSpot">Add spot to browser override</button><button class="ghost-btn" id="downloadSpots">Download spots_override.json</button></div><p class="notice">Local spot additions help you prototype. To make a spot permanent, commit it to the CSV or spots.json.</p></section>
+      <section class="admin-card"><h2>Hide / show spots</h2><input id="spotFilter" placeholder="Filter spot list…" /><div id="adminSpotList" class="admin-list"></div></section>
+      <section class="admin-card"><h2>Current exported config</h2><pre id="configPreview" class="codebox"></pre></section>
+    </div>
+  </div>
   <script src="admin.js"></script>
 </body>
 </html>

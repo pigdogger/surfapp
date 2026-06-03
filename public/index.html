@@ -4,7 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071622" />
-  <title>California Surf Light</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CaliSurf Light" />
+  <title>CaliSurf Light</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="preconnect" href="https://server.arcgisonline.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -13,26 +22,40 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">Pacific public model · Stage 1</p>
-        <h1>California Surf Light</h1>
+      <div class="brand-lockup">
+        <img class="app-logo" src="assets/icons/logo-white-192.png" alt="CaliSurf Light logo" />
+        <div>
+          <p class="eyebrow">west coast model V1</p>
+          <h1>CaliSurf Light</h1>
+          <p class="refresh-line" id="modelRefresh">model refresh: loading…</p>
+        </div>
       </div>
-      <div class="status-pill" id="globalStatus">Loading data…</div>
+      <div class="top-actions">
+        <button class="install-btn" id="installButton" hidden>Install app</button>
+        <div class="status-pill" id="globalStatus">Loading data…</div>
+      </div>
     </header>
+
+    <div class="update-toast" id="updateToast" hidden>
+      <span>Update available.</span>
+      <button id="updateButton">Download update</button>
+      <button id="dismissUpdate" aria-label="Dismiss update notice">×</button>
+    </div>
 
     <main class="layout">
       <section class="map-card" aria-label="California surf map">
-        <div class="map-toolbar">
-          <button class="chip is-active" data-region="all">All CA</button>
-          <button class="chip" data-region="San Diego">San Diego</button>
-          <button class="chip" data-region="Orange / LA">Orange / LA</button>
-          <button class="chip" data-region="Central Coast">Central</button>
-          <button class="chip" data-region="San Francisco / Marin">Bay Area</button>
-          <button class="chip" data-region="Humboldt / Del Norte">North</button>
-          <label class="toggle"><input id="bathyToggle" type="checkbox" checked /> Bathy</label>
+        <div class="region-scroller" id="regionScroller" aria-label="Region selector">
+          <button class="chip" data-region="all">All CA</button>
+          <button class="chip is-active" data-region="san-diego">San Diego</button>
+          <button class="chip" data-region="orange-county">Orange County</button>
+          <button class="chip" data-region="los-angeles">Los Angeles</button>
+          <button class="chip" data-region="ventura-sb">Ventura / SB</button>
+          <button class="chip" data-region="central-coast">Central Coast</button>
+          <button class="chip" data-region="monterey-bay">Monterey Bay</button>
+          <button class="chip" data-region="bay-area">Bay Area</button>
+          <button class="chip" data-region="north-coast">North Coast</button>
         </div>
         <div id="map" class="map"></div>
-        <p class="map-note">Basemap: Esri Ocean Basemap. Bathymetry overlay is a lightweight visual layer; real bathymetry coefficients live in spots.json.</p>
       </section>
 
       <aside class="side-panel">

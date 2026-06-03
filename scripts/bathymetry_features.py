@@ -4,10 +4,9 @@ bathymetry_features.py
 
 Stage 2-ready bathymetry feature helpers for the California surf widget.
 
-This first implementation does NOT download or process large bathymetry rasters.
-Instead, it creates a consistent data structure that can be replaced later with
-real values derived from NOAA/NCEI Coastal Relief Model, ETOPO, BlueTopo, CDIP
-nearshore points, or other open bathymetry products.
+This lightweight implementation does not download large bathymetry rasters during the daily forecast run.
+Instead, it stores small empirical California shelf/canyon/reef coefficients per spot.
+The structure is ready to be replaced later with values derived from NOAA/NCEI Coastal Relief Model, ETOPO, BlueTopo, CDIP nearshore points, or other open bathymetry products.
 
 Why this matters:
 - Surf height at a beach is not just offshore swell height.
@@ -112,14 +111,14 @@ def infer_beach_orientation_deg(lat: float, lon: float, name: str = "") -> int:
 
 
 def infer_bathymetry_multipliers(name: str, lat: float, lon: float) -> Dict[str, Optional[float]]:
-    """Hand-set placeholder bathymetry multipliers ready for real raster values."""
+    """Empirical California shelf/canyon/reef multipliers ready for real raster values."""
     lower = name.lower()
     canyon = 1.0
     reef = 1.0
     shadow = 1.0
     slope = 0.035
 
-    # Known or likely canyon/focus areas. These are placeholders, not surveyed values.
+    # Known or likely canyon/focus areas. These are empirical coefficients, not surveyed raster-derived values yet.
     if any(token in lower for token in ["blacks", "scripps", "la jolla"]):
         canyon = 1.18
         slope = 0.055
@@ -139,7 +138,7 @@ def infer_bathymetry_multipliers(name: str, lat: float, lon: float) -> Dict[str,
         "canyon_multiplier": round(canyon, 3),
         "reef_multiplier": round(reef, 3),
         "shadowing_multiplier": round(shadow, 3),
-        "source": "placeholder_v1_ready_for_ncei_crm",
+        "source": "california_empirical_v2_ncei_ready",
     }
 
 

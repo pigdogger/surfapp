@@ -1,13 +1,16 @@
 {
-  "data_base_url": "./data",
+  "data_base_url": "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
   "theme": {
     "bg": "#071622",
     "panel": "#0e2434",
     "accent": "#1bb8d4",
     "accent2": "#ff7f50"
   },
-  "marker_size": 13,
+  "marker_size": 9,
   "typography_scale": 1,
+  "corner_radius": 12,
+  "edge_buffer": 18,
+  "default_region": "san-diego",
   "layout": "full",
   "show_cards": {
     "swell": true,
@@ -21,5 +24,6 @@
   },
   "show_swell_arrows": true,
   "show_wind_arrows": true,
-  "show_bathymetry": true
+  "hidden_spot_ids": [],
+  "added_spots": []
 }
