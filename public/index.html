@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#071622" />
+  <title>California Surf Light</title>
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link rel="preconnect" href="https://server.arcgisonline.com" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Pacific public model · Stage 1</p>
+        <h1>California Surf Light</h1>
+      </div>
+      <div class="status-pill" id="globalStatus">Loading data…</div>
+    </header>
+
+    <main class="layout">
+      <section class="map-card" aria-label="California surf map">
+        <div class="map-toolbar">
+          <button class="chip is-active" data-region="all">All CA</button>
+          <button class="chip" data-region="San Diego">San Diego</button>
+          <button class="chip" data-region="Orange / LA">Orange / LA</button>
+          <button class="chip" data-region="Central Coast">Central</button>
+          <button class="chip" data-region="San Francisco / Marin">Bay Area</button>
+          <button class="chip" data-region="Humboldt / Del Norte">North</button>
+          <label class="toggle"><input id="bathyToggle" type="checkbox" checked /> Bathy</label>
+        </div>
+        <div id="map" class="map"></div>
+        <p class="map-note">Basemap: Esri Ocean Basemap. Bathymetry overlay is a lightweight visual layer; real bathymetry coefficients live in spots.json.</p>
+      </section>
+
+      <aside class="side-panel">
+        <div class="search-row">
+          <input id="spotSearch" type="search" placeholder="Search surf spots…" autocomplete="off" />
+        </div>
+        <div class="spot-list" id="spotList" aria-label="Surf spot list"></div>
+      </aside>
+
+      <section class="forecast-panel" id="forecastPanel" aria-live="polite">
+        <div class="empty-state">Select a spot from the map or list.</div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

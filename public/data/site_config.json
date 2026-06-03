@@ -1,0 +1,25 @@
+{
+  "data_base_url": "./data",
+  "theme": {
+    "bg": "#071622",
+    "panel": "#0e2434",
+    "accent": "#1bb8d4",
+    "accent2": "#ff7f50"
+  },
+  "marker_size": 13,
+  "typography_scale": 1,
+  "layout": "full",
+  "show_cards": {
+    "swell": true,
+    "wind": true,
+    "tide": true,
+    "sun": true,
+    "confidence": true,
+    "model": true,
+    "hourly": true,
+    "warnings": true
+  },
+  "show_swell_arrows": true,
+  "show_wind_arrows": true,
+  "show_bathymetry": true
+}
