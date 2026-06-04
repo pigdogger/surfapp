@@ -31,5 +31,16 @@
   "show_swell_arrows": true,
   "show_wind_arrows": true,
   "hidden_spot_ids": [],
-  "added_spots": []
+  "added_spots": [],
+  "mobile_detail_scale": 0.92,
+  "wind_layer_enabled": true,
+  "wind_layer_opacity": 0.7,
+  "wind_particle_density": 1.0,
+  "auto_scroll_selected_list": false,
+  "auto_scroll_region_chips": false,
+  "supabase": {
+    "enabled": false,
+    "url": "",
+    "anon_key": ""
+  }
 }

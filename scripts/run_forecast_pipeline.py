@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SPOTS_PATH = ROOT / "public" / "data" / "spots.json"
 OUT_PATH = ROOT / "public" / "data" / "latest_forecasts.json"
 WAVE_GRID_OUT_PATH = ROOT / "public" / "data" / "wave_grid_24h.json"
+WIND_GRID_OUT_PATH = ROOT / "public" / "data" / "wind_grid_latest.json"
 
 M_TO_FT = 3.28084
 MPS_TO_KT = 1.94384
@@ -51,6 +52,7 @@ OPEN_METEO_WEATHER_API = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_BATCH_SIZE = int(os.environ.get("OPEN_METEO_BATCH_SIZE", "35"))
 FORECAST_HOURS = int(os.environ.get("SURF_FORECAST_HOURS", "120"))
 WAVE_GRID_HOURS = int(os.environ.get("SURF_WAVE_GRID_HOURS", "24"))
+WIND_GRID_HOURS = int(os.environ.get("SURF_WIND_GRID_HOURS", "24"))
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 NDBC_CACHE: Dict[Tuple[str, str], Tuple[Optional[Dict[str, str]], str]] = {}
@@ -151,6 +153,45 @@ def safe_get(url: str, *, params: Optional[dict] = None, timeout: int = 28) -> r
 def chunks(items: Sequence[Dict[str, Any]], size: int) -> Iterable[List[Dict[str, Any]]]:
     for i in range(0, len(items), size):
         yield list(items[i:i + size])
+
+
+def row_to_spot(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a Supabase surf_spots row to the static spots.json shape."""
+    return {
+        "id": row.get("id"),
+        "name": row.get("name"),
+        "region": row.get("region") or "California",
+        "lat": float(row.get("lat")),
+        "lon": float(row.get("lon")),
+        "active": row.get("active", True),
+        "beach_orientation_deg": row.get("beach_orientation_deg"),
+        "bathymetry": row.get("bathymetry") or {"slope_5_20m": None, "canyon_multiplier": 1.0, "reef_multiplier": 1.0, "shadowing_multiplier": 1.0},
+        "exposure_by_direction": row.get("exposure_by_direction") or {},
+        "public_data": row.get("public_data") or {},
+        "notes": row.get("notes") or "Supabase spot",
+    }
+
+
+def load_spots_from_supabase() -> Optional[List[Dict[str, Any]]]:
+    """Pull live editable spots from Supabase for GitHub Actions."""
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+    if not url or not key:
+        return None
+    try:
+        res = requests.get(
+            f"{url}/rest/v1/surf_spots",
+            params={"select": "*", "active": "eq.true", "order": "display_order.asc.nullslast"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}", "User-Agent": "CaliSurf-Light/1.0"},
+            timeout=30,
+        )
+        res.raise_for_status()
+        rows = res.json()
+        spots = [row_to_spot(r) for r in rows if r.get("id") and r.get("lat") is not None and r.get("lon") is not None]
+        return spots or None
+    except Exception as exc:
+        print(f"Supabase spot pull failed, using static spots.json: {type(exc).__name__}: {exc}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -1136,17 +1177,119 @@ def fetch_wave_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
         "warnings": warnings,
     }
 
+
+def california_wind_grid_points() -> List[Dict[str, float]]:
+    """Coarse land+nearshore grid for Windy-style particle lines."""
+    lats = frange(30.5, 42.5, 1.0)
+    lons = frange(-125.5, -116.5, 1.0)
+    return [{"lat": lat, "lon": lon} for lat in lats for lon in lons]
+
+
+def synthetic_wind_grid(generated_at: dt.datetime, status: str = "wind_grid:fallback_synthetic") -> Dict[str, Any]:
+    base = next_utc_hour(generated_at)
+    pts = california_wind_grid_points()
+    frames: List[Dict[str, Any]] = []
+    for hour in range(0, WIND_GRID_HOURS + 1):
+        t = base + dt.timedelta(hours=hour)
+        frame_points = []
+        for p in pts:
+            lat, lon = p["lat"], p["lon"]
+            sea_breeze = clamp((hour - 9) / 6, 0, 1) * clamp((18 - hour) / 6, 0, 1)
+            speed = clamp(4.5 + sea_breeze * 7 + 1.5 * math.sin(lat * .7 + hour * .2), 1.5, 24)
+            direction = (255 + 24 * sea_breeze + 12 * math.sin(lon * .4 + hour * .3)) % 360
+            frame_points.append({"lat": lat, "lon": lon, "speed_kt": round(speed, 1), "direction_deg": round(direction)})
+        frames.append({"time": to_iso(t), "points": frame_points})
+    return {
+        "generated_at": to_iso(generated_at),
+        "valid_for_hours": WIND_GRID_HOURS,
+        "model": "calisurf-wind-grid-v1",
+        "source": status,
+        "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -125.5, "lon_max": -116.5},
+        "frames": frames,
+        "warnings": [status] if "fallback" in status or "offline" in status or "failed" in status else [],
+    }
+
+
+def fetch_wind_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
+    if os.environ.get("SURF_PIPELINE_OFFLINE") == "1":
+        return synthetic_wind_grid(generated_at, "wind_grid:offline_synthetic")
+    grid = california_wind_grid_points()
+    base = next_utc_hour(generated_at)
+    frame_map: Dict[str, List[Dict[str, Any]]] = {
+        to_iso(base + dt.timedelta(hours=h)): [] for h in range(0, WIND_GRID_HOURS + 1)
+    }
+    warnings: List[str] = []
+    for batch in chunks(grid, OPEN_METEO_BATCH_SIZE):
+        lats = ",".join(f"{p['lat']:.4f}" for p in batch)
+        lons = ",".join(f"{p['lon']:.4f}" for p in batch)
+        params = {
+            "latitude": lats,
+            "longitude": lons,
+            "hourly": "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+            "forecast_hours": str(WIND_GRID_HOURS + 1),
+            "wind_speed_unit": "kn",
+            "timezone": "GMT",
+        }
+        if os.environ.get("OPEN_METEO_WIND_MODELS"):
+            params["models"] = os.environ["OPEN_METEO_WIND_MODELS"]
+        try:
+            payload = safe_get(OPEN_METEO_WEATHER_API, params=params, timeout=40).json()
+            items = normalise_open_meteo_payload(payload)
+            for source_point, item in zip(batch, items):
+                hourly = item.get("hourly") or {}
+                times = hourly.get("time") or []
+                for i, raw_time in enumerate(times[: WIND_GRID_HOURS + 1]):
+                    try:
+                        time_key = to_iso(parse_iso_utc(raw_time))
+                        if time_key not in frame_map:
+                            continue
+                        speed = num_or_none(hourly, "wind_speed_10m", i)
+                        direction = num_or_none(hourly, "wind_direction_10m", i)
+                        if speed is None or direction is None:
+                            continue
+                        frame_map[time_key].append({
+                            "lat": source_point["lat"],
+                            "lon": source_point["lon"],
+                            "speed_kt": round(float(speed), 1),
+                            "direction_deg": round(float(direction)),
+                        })
+                    except Exception:
+                        continue
+        except Exception as exc:
+            warnings.append(f"wind_grid_batch_failed:{type(exc).__name__}")
+    frames = [{"time": t, "points": pts} for t, pts in frame_map.items() if pts]
+    if not frames or sum(len(f["points"]) for f in frames) < 12:
+        return synthetic_wind_grid(generated_at, "wind_grid:openmeteo_failed_fallback")
+    return {
+        "generated_at": to_iso(generated_at),
+        "valid_for_hours": WIND_GRID_HOURS,
+        "model": "calisurf-wind-grid-v1",
+        "source": "Open-Meteo Weather Forecast API best-match 10 m wind grid; set OPEN_METEO_WIND_MODELS to force HRRR/GFS where supported",
+        "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -125.5, "lon_max": -116.5},
+        "frames": frames,
+        "warnings": warnings,
+    }
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--spots", type=Path, default=SPOTS_PATH)
     parser.add_argument("--out", type=Path, default=OUT_PATH)
     parser.add_argument("--wave-grid-out", type=Path, default=WAVE_GRID_OUT_PATH)
+    parser.add_argument("--wind-grid-out", type=Path, default=WIND_GRID_OUT_PATH)
     parser.add_argument("--limit", type=int, default=0, help="Optional limit for testing")
     args = parser.parse_args()
 
     if not args.spots.exists():
         raise SystemExit(f"Missing {args.spots}. Run scripts/build_spots_json.py first.")
-    spots = json.loads(args.spots.read_text())
+    static_spots = json.loads(args.spots.read_text())
+    supabase_spots = load_spots_from_supabase()
+    if supabase_spots:
+        print(f"Loaded {len(supabase_spots)} active spots from Supabase.")
+        spots = supabase_spots
+    else:
+        spots = static_spots
     active_spots = [s for s in spots if s.get("active", True)]
     if args.limit:
         active_spots = active_spots[: args.limit]
@@ -1175,6 +1318,11 @@ def main() -> None:
     args.wave_grid_out.parent.mkdir(parents=True, exist_ok=True)
     args.wave_grid_out.write_text(json.dumps(wave_grid_payload, indent=2) + "\n", encoding="utf-8")
 
+    print("Building 24-hour regional wind particle grid...")
+    wind_grid_payload = fetch_wind_grid_24h(generated_at)
+    args.wind_grid_out.parent.mkdir(parents=True, exist_ok=True)
+    args.wind_grid_out.write_text(json.dumps(wind_grid_payload, indent=2) + "\n", encoding="utf-8")
+
     payload = {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": FORECAST_HOURS,
@@ -1185,10 +1333,17 @@ def main() -> None:
         "sources": {
             "waves_forecast": "Open-Meteo Marine API best-match wave model guidance",
             "waves_observed": "NDBC realtime flat files and CDIP stations mirrored through NDBC when available",
-            "wind_forecast": "Open-Meteo Weather Forecast API best-match 10 m wind guidance",
+            "wind_forecast": "Open-Meteo Weather Forecast API best-match 10 m wind guidance with NDBC observation anchoring; direct HRRR/RAP/GFS GRIB ingest can be enabled later via dedicated NOAA fetchers",
             "tides": "NOAA CO-OPS predictions",
             "bathymetry": "empirical California shelf/canyon/reef exposure coefficients in spots.json; NCEI CRM/ETOPO raster sampler remains the next precision upgrade",
             "wave_grid_layer": "public/data/wave_grid_24h.json generated from Open-Meteo Marine API wave_height/wave_direction over a reduced California offshore grid",
+            "wind_grid_layer": "public/data/wind_grid_latest.json generated from Open-Meteo 10 m wind grid for Windy-style particle rendering",
+        },
+        "wind_grid": {
+            "file": "wind_grid_latest.json",
+            "frame_count": len(wind_grid_payload.get("frames", [])),
+            "source": wind_grid_payload.get("source"),
+            "warnings": wind_grid_payload.get("warnings", []),
         },
         "wave_grid": {
             "file": "wave_grid_24h.json",
@@ -1209,6 +1364,7 @@ def main() -> None:
     args.out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {len(forecasts)} forecasts to {args.out}")
     print(f"Wrote {len(wave_grid_payload.get('frames', []))} wave-grid frames to {args.wave_grid_out}")
+    print(f"Wrote {len(wind_grid_payload.get('frames', []))} wind-grid frames to {args.wind_grid_out}")
 
 
 if __name__ == "__main__":

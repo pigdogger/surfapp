@@ -1,102 +1,63 @@
-# CaliSurf Light — west coast model V1.2
+# CaliSurf Light
 
-Static California surf forecast app with a GitHub Actions forecast pipeline.
+**west coast model V1.8**
 
-## What is new in this update
+Static Netlify surf app + GitHub Actions forecast pipeline + optional Supabase admin backend.
 
-- Adds a semi-transparent **24-hour wave-height colorization layer** over the Esri Ocean Basemap.
-- Adds animated wave frames from `public/data/wave_grid_24h.json`.
-- Adds small swell-direction arrows inside the wave layer.
-- Extends spot forecasts to **5 days** of 3-hourly model snapshots.
-- Renames the hourly card to **30 hour snapshots**.
-- Adds a 5-column **5 day forecast** card.
-- Adds map marker color modes:
-  - poor → fair/good rating
-  - wave size
-  - morning-good window
-  - afternoon-good window
-  - evening-good window
-- Defaults to San Diego.
-- Removes spot count from the public header.
-- Removes bathy checkbox and map attribution text.
-- Keeps Esri Ocean Basemap as the visual base map.
-- Keeps PWA install/update support and the CaliSurf Light logo/favicon.
+## What this update fixes
 
-## Data files produced by GitHub Actions
+- Stops mobile page jumping when region chips, map spots, or spot-list rows are selected.
+- Keeps spot highlighting and map panning/centering, but does not auto-scroll the page.
+- Makes the mobile map a widescreen/banner map above the spot list.
+- Makes the logo larger.
+- Adds mobile forecast detail scaling in the admin UI.
+- Adds visible animated wave-height pulsing over the Esri Ocean Basemap.
+- Adds `public/data/wind_grid_latest.json` and an animated Windy/MyRadar-style wind particle layer.
+- Puts the spot-color selector on its own left-aligned row above the wave/wind layer controls.
+- Adds a Wind direction checkbox and wind pause/play button.
+- Makes the 5-day forecast horizontally scrollable on mobile and wider on desktop so wave heights stay on one line.
+- Changes the snapshot card to **39 hour snapshots**.
+- Colors snapshot wind green for low/offshore/clean wind and yellow for higher/onshore wind.
+- Adds a small solid color dot to each spot row matching the active marker-color scheme.
+- Makes map dots solid color with no white outline or shiny fill; selected dots keep a halo/light effect.
+- Shows all active surf spots on the map even when a region is selected; spots outside the selected region are dim/grey but still clickable.
+- Adds Supabase-ready admin auth, editable spots, live aesthetic settings, RLS schema, and GitHub Actions Supabase spot ingestion.
 
-The workflow now commits:
+## Upload steps
 
-```text
-public/data/spots.json
-public/data/latest_forecasts.json
-public/data/wave_grid_24h.json
-public/data/site_config.json
-```
-
-`latest_forecasts.json` contains the spot-level forecast cards.
-
-`wave_grid_24h.json` contains lightweight regional grid frames used by the animated map overlay. The browser does not parse GRIB and does not call model APIs directly.
-
-## Model strategy
-
-The app uses a two-level strategy:
-
-1. **Spot model:** NDBC/CDIP observations, Open-Meteo marine/wind guidance, NOAA CO-OPS tides, and empirical spot exposure/bathymetry coefficients.
-2. **Regional wave layer:** Open-Meteo Marine API wave-height and wave-direction fields on a reduced California offshore grid, exported as small JSON for browser animation.
-
-Open-Meteo is used as the easiest reliable Stage 1/2 model gateway because it exposes wave variables such as wave height, direction, period, swell wave height/direction/period, secondary swell, and GFS Wave/ECMWF/DWD/Météo-France wave-model sources through JSON. The higher-control upgrade is direct NOAA NOMADS GFS-Wave GRIB2 retrieval for variables such as `HTSGW`, `DIRPW`, and `PERPW`, using `cfgrib` or `wgrib2`; that should be done server-side in GitHub Actions and only derived JSON should be committed.
-
-## Source-code/modeling note for Ventusky/NREL-style maps
-
-I did not find public source code for Ventusky’s sea-map renderer or the NREL Marine Energy Atlas viewer that can simply be copied into this project. Instead, this app reproduces the useful pattern: fetch/model wave fields server-side, reduce them to a mobile-sized grid, then render a semi-transparent canvas color layer with arrows over the existing map. That avoids scraping or depending on another site’s proprietary front-end.
-
-## Admin aesthetic console
-
-Open:
-
-```text
-/admin.html
-```
-
-Login:
-
-```text
-admin@calisurf.com
-bonitaindo26
-```
-
-The static admin console can change marker size, marker color mode, corner radius, mobile buffer, wave-layer opacity, wave-layer arrows, card visibility, colors, layout, hidden spots, and local spot additions.
-
-Important: this is still a local/static admin gate. It saves to browser `localStorage` or lets you download `site_config.json`. True public live editing later needs Supabase, Firebase, Netlify Identity, or GitHub write integration.
-
-## Deploy/update steps
-
-1. Upload/overwrite these files in GitHub.
-2. Commit the change.
-3. Netlify should redeploy because frontend files changed.
-4. Run:
+Unzip this package and upload the **contents inside** the folder to GitHub, not the folder itself. Commit, then run:
 
 ```text
 Actions → Update surf forecasts → Run workflow
 ```
 
-5. Confirm these files changed:
+Trigger a Netlify deploy if it does not redeploy automatically, then hard-refresh the app.
+
+## Supabase setup
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the SQL Editor.
+3. Create the auth user `admin@calisurf.com`.
+4. Insert that auth user's UUID into `admin_profiles` using the commented SQL at the bottom of `supabase/schema.sql`.
+5. Add GitHub Actions secrets:
 
 ```text
-public/data/latest_forecasts.json
-public/data/wave_grid_24h.json
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 ```
 
-6. Open the site and hard refresh once.
+6. Put your public anon key into `public/data/site_config.json`:
 
-If users have installed the PWA, they should see **Update available** when the new service worker is ready.
+```json
+"supabase": {
+  "enabled": true,
+  "url": "https://YOUR_PROJECT.supabase.co",
+  "anon_key": "YOUR_PUBLIC_ANON_KEY"
+}
+```
 
-## Future direct-GRIB upgrade
+Once configured, admin changes to GPS, spot names, active/hidden state, marker size, opacity, mobile scaling, corner radius, and other settings publish through Supabase instead of GitHub uploads. GitHub Actions reads the Supabase spots on the next model run.
 
-For a production-grade version, keep this exact frontend JSON shape but replace the Open-Meteo wave grid generator with direct NOAA NOMADS GFS-Wave GRIB2 subset downloads:
+## Model note
 
-- Bbox: ~30.5°N–42.5°N, 125.5°W–116.0°W.
-- Variables: `HTSGW`, `DIRPW`, `PERPW`, plus swell partitions when needed.
-- Parser: `cfgrib + xarray`, fallback `wgrib2`.
-- Commit only reduced JSON, never raw GRIB.
-
+This version includes working JSON-based wave and wind visual layers. The current production-safe gateway uses Open-Meteo model APIs plus existing NDBC/CDIP and NOAA CO-OPS ingestion. The direct NOAA HRRR/RAP/GFS/GFS-Wave GRIB2 implementation is still the next deeper model upgrade; the app and pipeline are structured so only derived JSON goes to the frontend.

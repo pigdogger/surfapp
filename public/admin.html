@@ -15,7 +15,7 @@
     <section class="login-card">
       <p class="eyebrow">Aesthetic console</p>
       <h2>CaliSurf Light Admin</h2>
-      <p>This is a local static-site gate for the admin console. Full secure multi-user editing would require a real backend later.</p>
+      <p>Use Supabase email/password auth when configured. A local fallback remains available for setup/testing only.</p>
       <label>Email <input id="loginEmail" type="email" autocomplete="username" placeholder="admin@calisurf.com" /></label>
       <label>Password <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" /></label>
       <button class="primary-btn" id="loginButton">Log in</button>
@@ -28,7 +28,7 @@
       <div>
         <p class="eyebrow">CaliSurf Light · west coast model V1</p>
         <h1>Aesthetic console</h1>
-        <p class="refresh-line">Local controls. Save to browser or download site_config.json.</p>
+        <p class="refresh-line" id="adminModeLine">Supabase controls when configured; local fallback during setup.</p>
       </div>
       <div class="button-row">
         <a class="chip" href="index.html">Open public page</a>
@@ -57,6 +57,7 @@
           <label>Typography scale <input id="fontScale" type="range" min="0.85" max="1.25" step="0.05" value="1" /></label>
           <label>Window corner radius <input id="cornerRadius" type="range" min="2" max="28" value="8" /></label>
           <label>Mobile edge buffer <input id="edgeBuffer" type="range" min="8" max="40" value="22" /></label>
+          <label>Mobile detail scale <input id="mobileDetailScale" type="range" min="0.75" max="1.10" step="0.03" value="0.92" /></label>
           <label>Default region
             <select id="defaultRegion">
               <option value="san-diego">San Diego</option>
@@ -89,18 +90,21 @@
           <label><input id="showWindArrows" type="checkbox" checked /> Wind arrows</label>
           <label><input id="waveLayerEnabled" type="checkbox" checked /> Wave map layer</label>
           <label><input id="showWaveDirectionArrows" type="checkbox" checked /> Wave-layer arrows</label>
-          <label>Wave layer opacity <input id="waveLayerOpacity" type="range" min="0.1" max="0.75" step="0.05" value="0.44" /></label>
+          <label><input id="windLayerEnabled" type="checkbox" checked /> Wind direction layer</label>
+          <label>Wave height layer opacity <input id="waveLayerOpacity" type="range" min="0.1" max="0.75" step="0.05" value="0.44" /></label>
+          <label>Wind layer opacity <input id="windLayerOpacity" type="range" min="0.15" max="0.95" step="0.05" value="0.7" /></label>
+          <label>Wind particle density <input id="windParticleDensity" type="range" min="0.5" max="2.5" step="0.1" value="1" /></label>
         </div>
         <div class="button-row">
-          <button class="primary-btn" id="saveConfig">Save to this browser</button>
+          <button class="primary-btn" id="saveConfig">Save settings</button>
           <button class="ghost-btn" id="downloadConfig">Download site_config.json</button>
           <button class="ghost-btn" id="resetConfig">Reset</button>
         </div>
-        <p class="notice">This static admin console saves to localStorage and can export JSON. To make changes permanent for everyone, upload the exported site_config.json to public/data/site_config.json in GitHub.</p>
+        <p class="notice">When Supabase is configured, this saves public site settings for everyone immediately. Without Supabase, it saves to this browser and can export site_config.json.</p>
       </section>
 
       <section class="admin-card">
-        <h2>Add a spot locally</h2>
+        <h2>Add / edit a spot</h2>
         <div class="form-grid">
           <label>Name <input id="newName" placeholder="New surf spot" /></label>
           <label>Region <input id="newRegion" placeholder="San Diego" /></label>
@@ -110,10 +114,10 @@
           <label>Default exposure <input id="newExposure" type="number" step="0.1" min="0" max="2" placeholder="1.0" /></label>
         </div>
         <div class="button-row">
-          <button class="primary-btn" id="addSpot">Add spot to browser override</button>
+          <button class="primary-btn" id="addSpot">Save spot</button>
           <button class="ghost-btn" id="downloadSpots">Download spots_override.json</button>
         </div>
-        <p class="notice">Local spot additions help you prototype. To make a spot permanent, add it to california_surf_spots_full.csv or spots.json and commit it.</p>
+        <p class="notice">With Supabase configured, new spots are saved to the surf_spots table and are picked up by future model runs. Without Supabase, this is a browser-only override.</p>
       </section>
 
       <section class="admin-card">
@@ -129,6 +133,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="admin.js"></script>
 </body>
 </html>

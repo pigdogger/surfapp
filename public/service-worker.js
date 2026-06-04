@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'calisurf-light-pwa-v2-wave-layer-2026-06-04';
+const CACHE_VERSION = 'calisurf-light-pwa-v18-mobile-wind-supabase-2026-06-04';
 const APP_SHELL = [
   './',
   './index.html',

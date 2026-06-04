@@ -1,29 +1,36 @@
-/* Local-only admin controls for CaliSurf Light. */
+/* CaliSurf Light admin console · Supabase-ready. */
 (() => {
-  const ADMIN_EMAIL = "admin@calisurf.com";
-  const ADMIN_PASSWORD = "bonitaindo26";
+  const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
+  const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
 
   const DEFAULT_CONFIG = {
-    data_base_url: "./data",
+    data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
     theme: { bg: "#071622", panel: "#0e2434", accent: "#1bb8d4", accent2: "#ff7f50" },
     marker_size: 7,
     marker_color_mode: "rating",
     typography_scale: 1,
     corner_radius: 8,
     edge_buffer: 22,
+    mobile_detail_scale: 0.92,
     wave_layer_enabled: true,
     wave_layer_opacity: 0.44,
     show_wave_direction_arrows: true,
+    wind_layer_enabled: true,
+    wind_layer_opacity: 0.70,
+    wind_particle_density: 1.0,
+    auto_scroll_selected_list: false,
+    auto_scroll_region_chips: false,
     default_region: "san-diego",
     layout: "full",
     show_cards: { swell: true, wind: true, tide: true, sun: true, confidence: true, model: true, hourly: true, five_day: true, warnings: true },
     show_swell_arrows: true,
     show_wind_arrows: true,
     hidden_spot_ids: [],
-    added_spots: []
+    added_spots: [],
+    supabase: { enabled: false, url: "", anon_key: "" }
   };
 
-  const state = { config: structuredClone(DEFAULT_CONFIG), spots: [], filter: "" };
+  const state = { config: structuredClone(DEFAULT_CONFIG), spots: [], filter: "", supabase: null, session: null, supabaseReady: false, _loaded: false };
   const $ = id => document.getElementById(id);
 
   function mergeDeep(base, override) {
@@ -58,20 +65,62 @@
     $("adminShell").classList.toggle("locked", !unlocked);
   }
 
-  function attemptLogin() {
+  function setAdminMode(text, kind = "ok") {
+    const el = $("adminModeLine");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle("admin-status-ok", kind === "ok");
+    el.classList.toggle("admin-status-warn", kind !== "ok");
+  }
+
+  async function initSupabaseFromConfig() {
+    const cfg = state.config.supabase || {};
+    state.supabaseReady = false;
+    state.supabase = null;
+    if (!cfg.enabled || !cfg.url || !cfg.anon_key || !window.supabase) {
+      setAdminMode("Local fallback mode. Add Supabase keys to site_config.json for live admin publishing.", "warn");
+      return;
+    }
+    state.supabase = window.supabase.createClient(cfg.url, cfg.anon_key);
+    const { data } = await state.supabase.auth.getSession();
+    state.session = data?.session || null;
+    state.supabaseReady = true;
+    setAdminMode("Supabase mode: admin changes publish to public settings/spots.", "ok");
+  }
+
+  async function attemptLogin() {
     const email = $("loginEmail").value.trim().toLowerCase();
     const password = $("loginPassword").value;
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    $("loginError").textContent = "";
+    if (state.supabaseReady && state.supabase) {
+      const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
+      if (error) { $("loginError").textContent = error.message || "Supabase login failed."; return; }
+      state.session = data.session;
+      const { data: profile, error: profileError } = await state.supabase.from("admin_profiles").select("role, active").eq("id", data.user.id).maybeSingle();
+      if (profileError || !profile?.active || profile.role !== "admin") {
+        await state.supabase.auth.signOut();
+        $("loginError").textContent = "This account is not an active CaliSurf admin.";
+        return;
+      }
+      setUnlocked(true);
+      state._loaded = false;
+      await initAdmin();
+      return;
+    }
+    if (email === FALLBACK_ADMIN_EMAIL && password === FALLBACK_ADMIN_PASSWORD) {
       sessionStorage.setItem("calisurfAdminLoggedIn", "1");
       setUnlocked(true);
-      initAdmin();
+      await initAdmin();
     } else {
       $("loginError").textContent = "Wrong email or password.";
     }
   }
 
-  function logout() {
+  async function logout() {
     sessionStorage.removeItem("calisurfAdminLoggedIn");
+    if (state.supabase) await state.supabase.auth.signOut();
+    state.session = null;
+    state._loaded = false;
     setUnlocked(false);
   }
 
@@ -86,9 +135,13 @@
     $("fontScale").value = c.typography_scale;
     $("cornerRadius").value = c.corner_radius ?? 8;
     $("edgeBuffer").value = c.edge_buffer ?? 22;
+    $("mobileDetailScale").value = c.mobile_detail_scale ?? 0.92;
     $("waveLayerEnabled").checked = c.wave_layer_enabled !== false;
     $("waveLayerOpacity").value = c.wave_layer_opacity ?? 0.44;
     $("showWaveDirectionArrows").checked = c.show_wave_direction_arrows !== false;
+    $("windLayerEnabled").checked = c.wind_layer_enabled !== false;
+    $("windLayerOpacity").value = c.wind_layer_opacity ?? 0.70;
+    $("windParticleDensity").value = c.wind_particle_density ?? 1.0;
     $("defaultRegion").value = c.default_region || "san-diego";
     $("layoutMode").value = c.layout;
     $("cardSwell").checked = c.show_cards.swell !== false;
@@ -113,9 +166,13 @@
       typography_scale: Number($("fontScale").value),
       corner_radius: Number($("cornerRadius").value),
       edge_buffer: Number($("edgeBuffer").value),
+      mobile_detail_scale: Number($("mobileDetailScale").value),
       wave_layer_enabled: $("waveLayerEnabled").checked,
       wave_layer_opacity: Number($("waveLayerOpacity").value),
       show_wave_direction_arrows: $("showWaveDirectionArrows").checked,
+      wind_layer_enabled: $("windLayerEnabled").checked,
+      wind_layer_opacity: Number($("windLayerOpacity").value),
+      wind_particle_density: Number($("windParticleDensity").value),
       default_region: $("defaultRegion").value,
       layout: $("layoutMode").value,
       show_cards: {
@@ -135,10 +192,16 @@
     previewConfig();
   }
 
-  function save() {
+  async function save() {
     readConfigFromForm();
+    if (state.supabaseReady && state.supabase && state.session) {
+      const { error } = await state.supabase.from("site_settings").upsert({ key: "public", value: state.config, updated_at: new Date().toISOString() });
+      if (error) { alert("Supabase save failed: " + error.message); return; }
+      alert("Saved to Supabase. Public app settings update on next page load.");
+      return;
+    }
     localStorage.setItem("surfAppAdminConfig", JSON.stringify(state.config, null, 2));
-    alert("Saved to this browser. Open the public page in this same browser to see it.");
+    alert("Saved to this browser only. Configure Supabase for public live changes.");
   }
 
   function download(filename, text) {
@@ -153,12 +216,33 @@
     URL.revokeObjectURL(url);
   }
 
-  function previewConfig() {
-    $("configPreview").textContent = JSON.stringify(state.config, null, 2);
+  function previewConfig() { $("configPreview").textContent = JSON.stringify(state.config, null, 2); }
+  function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])); }
+
+  function spotToRow(spot) {
+    return {
+      id: spot.id, name: spot.name, region: spot.region || "California", lat: Number(spot.lat), lon: Number(spot.lon), active: spot.active !== false,
+      display_order: spot.display_order ?? null, beach_orientation_deg: spot.beach_orientation_deg ?? null,
+      bathymetry: spot.bathymetry || {}, exposure_by_direction: spot.exposure_by_direction || {}, public_data: spot.public_data || {}, notes: spot.notes || "Admin-managed spot",
+      updated_at: new Date().toISOString()
+    };
   }
 
-  function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+  async function loadSupabaseSpots() {
+    if (!state.supabaseReady || !state.supabase || !state.session) return null;
+    const { data, error } = await state.supabase.from("surf_spots").select("*").order("display_order", { ascending: true });
+    if (error) { console.warn(error); return null; }
+    return data || [];
+  }
+
+  async function saveSpotToSupabase(spot) {
+    const { error } = await state.supabase.from("surf_spots").upsert(spotToRow(spot));
+    if (error) throw error;
+  }
+
+  async function setSpotActiveSupabase(id, active) {
+    const { error } = await state.supabase.from("surf_spots").update({ active, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
   }
 
   function renderSpotList() {
@@ -167,53 +251,61 @@
     const added = state.config.added_spots || [];
     const all = [...state.spots, ...added].filter(s => !q || s.name.toLowerCase().includes(q) || (s.region || "").toLowerCase().includes(q));
     $("adminSpotList").innerHTML = all.map(s => {
-      const isHidden = hidden.has(s.id);
-      return `<div class="admin-spot">
-        <span><strong>${escapeHtml(s.name)}</strong><br><small>${escapeHtml(s.region || "California")} · ${Number(s.lat).toFixed(4)}, ${Number(s.lon).toFixed(4)}</small></span>
-        <label><input type="checkbox" data-id="${s.id}" ${isHidden ? "" : "checked"}> visible</label>
+      const isVisible = state.supabaseReady ? s.active !== false : !hidden.has(s.id);
+      return `<div class="admin-spot" data-id="${escapeHtml(s.id)}">
+        <div class="admin-spot-edit">
+          <input data-field="name" value="${escapeHtml(s.name)}" title="Spot name" />
+          <input data-field="region" value="${escapeHtml(s.region || "California")}" title="Region" />
+          <input data-field="lat" type="number" step="0.000001" value="${Number(s.lat).toFixed(6)}" title="Latitude" />
+          <input data-field="lon" type="number" step="0.000001" value="${Number(s.lon).toFixed(6)}" title="Longitude" />
+          <button class="ghost-btn" data-save="${escapeHtml(s.id)}">Save</button>
+        </div>
+        <label><input type="checkbox" data-visible="${escapeHtml(s.id)}" ${isVisible ? "checked" : ""}> visible</label>
       </div>`;
     }).join("") || `<p class="notice">No matching spots.</p>`;
-    document.querySelectorAll("#adminSpotList input[type=checkbox]").forEach(cb => {
-      cb.addEventListener("change", () => {
-        const id = cb.dataset.id;
-        const set = new Set(state.config.hidden_spot_ids || []);
-        if (cb.checked) set.delete(id); else set.add(id);
-        state.config.hidden_spot_ids = [...set];
-        previewConfig();
-      });
-    });
+    document.querySelectorAll("#adminSpotList [data-visible]").forEach(cb => cb.addEventListener("change", async () => {
+      const id = cb.dataset.visible;
+      if (state.supabaseReady && state.supabase && state.session) {
+        try { await setSpotActiveSupabase(id, cb.checked); } catch (err) { alert("Supabase update failed: " + err.message); }
+        const spot = state.spots.find(s => s.id === id); if (spot) spot.active = cb.checked;
+      } else {
+        const set = new Set(state.config.hidden_spot_ids || []); if (cb.checked) set.delete(id); else set.add(id); state.config.hidden_spot_ids = [...set];
+      }
+      previewConfig();
+    }));
+    document.querySelectorAll("#adminSpotList [data-save]").forEach(btn => btn.addEventListener("click", async () => {
+      const wrap = btn.closest(".admin-spot");
+      const id = btn.dataset.save;
+      const original = [...state.spots, ...(state.config.added_spots || [])].find(s => s.id === id) || { id };
+      const get = f => wrap.querySelector(`[data-field="${f}"]`)?.value;
+      const spot = { ...original, id, name: get("name").trim(), region: get("region").trim() || "California", lat: Number(get("lat")), lon: Number(get("lon")), active: wrap.querySelector("[data-visible]").checked };
+      if (!spot.name || !Number.isFinite(spot.lat) || !Number.isFinite(spot.lon)) { alert("Name, lat, and lon are required."); return; }
+      await persistSpot(spot);
+    }));
   }
 
-  function addSpot() {
-    const name = $("newName").value.trim();
-    const lat = Number($("newLat").value);
-    const lon = Number($("newLon").value);
-    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-      alert("Name, latitude, and longitude are required.");
+  async function persistSpot(spot) {
+    if (state.supabaseReady && state.supabase && state.session) {
+      try {
+        await saveSpotToSupabase(spot);
+        const idx = state.spots.findIndex(s => s.id === spot.id);
+        if (idx >= 0) state.spots[idx] = spot; else state.spots.push(spot);
+        renderSpotList(); alert("Spot saved to Supabase.");
+      } catch (err) { alert("Supabase spot save failed: " + err.message); }
       return;
     }
-    const orientation = Number($("newOrientation").value || 260);
-    const exposure = Number($("newExposure").value || 1.0);
-    const id = slugify(name);
-    const spot = {
-      id,
-      name,
-      region: $("newRegion").value.trim() || "Custom",
-      lat,
-      lon,
-      active: true,
-      beach_orientation_deg: orientation,
-      bathymetry: { slope_5_20m: 0.035, canyon_multiplier: 1.0, reef_multiplier: 1.0, shadowing_multiplier: 1.0, source: "admin_local" },
-      exposure_by_direction: exposureTable(exposure),
-      public_data: { nearest_tide_station: null, buoy_candidates: [] },
-      notes: "Added from local admin console."
-    };
     const arr = state.config.added_spots || [];
-    const idx = arr.findIndex(s => s.id === id);
+    const idx = arr.findIndex(s => s.id === spot.id);
     if (idx >= 0) arr[idx] = spot; else arr.push(spot);
     state.config.added_spots = arr;
-    renderSpotList();
-    previewConfig();
+    renderSpotList(); previewConfig(); alert("Spot saved as a browser-only override.");
+  }
+
+  async function addSpot() {
+    const name = $("newName").value.trim(), lat = Number($("newLat").value), lon = Number($("newLon").value);
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) { alert("Name, latitude, and longitude are required."); return; }
+    const orientation = Number($("newOrientation").value || 260), exposure = Number($("newExposure").value || 1.0);
+    await persistSpot({ id: slugify(name), name, region: $("newRegion").value.trim() || "Custom", lat, lon, active: true, beach_orientation_deg: orientation, bathymetry: { slope_5_20m: 0.035, canyon_multiplier: 1.0, reef_multiplier: 1.0, shadowing_multiplier: 1.0, source: "admin" }, exposure_by_direction: exposureTable(exposure), public_data: { nearest_tide_station: null, buoy_candidates: [] }, notes: "Added from admin console." });
   }
 
   async function initAdmin() {
@@ -221,28 +313,31 @@
     state._loaded = true;
     try {
       const [spots, fileConfig] = await Promise.all([fetchJson("spots.json"), fetchJson("site_config.json").catch(() => ({}))]);
-      state.spots = spots.sort((a, b) => Number(a.lat) - Number(b.lat));
       state.config = mergeDeep(DEFAULT_CONFIG, fileConfig);
-      try {
-        const local = JSON.parse(localStorage.getItem("surfAppAdminConfig") || "null");
-        if (local) state.config = mergeDeep(state.config, local);
-      } catch (_) {}
-      applyConfigToForm();
-      renderSpotList();
-    } catch (err) {
-      console.error(err);
-      $("configPreview").textContent = "Could not load spots/config. Check public/data files.";
-    }
+      await initSupabaseFromConfig();
+      let supabaseSpots = null, supabaseSettings = null;
+      if (state.supabaseReady && state.session) {
+        const [settingsRes, spotRows] = await Promise.all([state.supabase.from("site_settings").select("value").eq("key", "public").maybeSingle(), loadSupabaseSpots()]);
+        if (!settingsRes.error && settingsRes.data?.value) supabaseSettings = settingsRes.data.value;
+        if (spotRows?.length) supabaseSpots = spotRows;
+      }
+      state.spots = (supabaseSpots || spots).sort((a, b) => Number(a.lat) - Number(b.lat));
+      state.config = mergeDeep(state.config, supabaseSettings || {});
+      if (!state.supabaseReady) { try { const local = JSON.parse(localStorage.getItem("surfAppAdminConfig") || "null"); if (local) state.config = mergeDeep(state.config, local); } catch (_) {} }
+      applyConfigToForm(); renderSpotList();
+    } catch (err) { console.error(err); $("configPreview").textContent = "Could not load spots/config. Check public/data files."; }
+  }
+
+  async function prepareLogin() {
+    try { const fileConfig = await fetchJson("site_config.json").catch(() => ({})); state.config = mergeDeep(DEFAULT_CONFIG, fileConfig); await initSupabaseFromConfig(); if (state.supabaseReady && state.session) { setUnlocked(true); await initAdmin(); return; } } catch (err) { console.warn(err); }
+    if (sessionStorage.getItem("calisurfAdminLoggedIn") === "1") { setUnlocked(true); await initAdmin(); } else setUnlocked(false);
   }
 
   function bind() {
     $("loginButton").addEventListener("click", attemptLogin);
     $("loginPassword").addEventListener("keydown", e => { if (e.key === "Enter") attemptLogin(); });
     $("logoutButton").addEventListener("click", logout);
-    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "fontScale", "cornerRadius", "edgeBuffer", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => {
-      $(id).addEventListener("input", readConfigFromForm);
-      $(id).addEventListener("change", readConfigFromForm);
-    });
+    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
     $("saveConfig").addEventListener("click", save);
     $("downloadConfig").addEventListener("click", () => { readConfigFromForm(); download("site_config.json", JSON.stringify(state.config, null, 2)); });
     $("resetConfig").addEventListener("click", () => { state.config = structuredClone(DEFAULT_CONFIG); localStorage.removeItem("surfAppAdminConfig"); applyConfigToForm(); renderSpotList(); });
@@ -252,10 +347,5 @@
   }
 
   bind();
-  if (sessionStorage.getItem("calisurfAdminLoggedIn") === "1") {
-    setUnlocked(true);
-    initAdmin();
-  } else {
-    setUnlocked(false);
-  }
+  prepareLogin();
 })();

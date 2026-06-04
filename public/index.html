@@ -50,18 +50,25 @@
           <button class="chip" data-region="north-coast">North Coast</button>
         </div>
         <div class="map-control-strip" aria-label="Map visual controls">
-          <label class="mini-toggle"><input id="waveLayerToggle" type="checkbox" checked /> Wave layer</label>
-          <button id="wavePlayPause" class="mini-button" type="button">Pause</button>
-          <span id="waveFrameLabel" class="wave-frame-label">24h wave animation</span>
-          <label class="marker-mode-label">Spot color
-            <select id="markerColorMode">
-              <option value="rating">Poor → fair/good</option>
-              <option value="wave_size">Wave size</option>
-              <option value="morning">Morning good</option>
-              <option value="afternoon">Afternoon good</option>
-              <option value="evening">Evening good</option>
-            </select>
-          </label>
+          <div class="map-control-row map-color-row">
+            <label class="marker-mode-label">Spot color
+              <select id="markerColorMode">
+                <option value="rating">Poor → fair/good</option>
+                <option value="wave_size">Wave size</option>
+                <option value="morning">Morning good</option>
+                <option value="afternoon">Afternoon good</option>
+                <option value="evening">Evening good</option>
+              </select>
+            </label>
+          </div>
+          <div class="map-control-row map-layer-row">
+            <label class="mini-toggle"><input id="waveLayerToggle" type="checkbox" checked /> Wave layer</label>
+            <button id="wavePlayPause" class="mini-button" type="button">Pause</button>
+            <span id="waveFrameLabel" class="wave-frame-label">24h wave animation</span>
+            <label class="mini-toggle"><input id="windLayerToggle" type="checkbox" checked /> Wind direction</label>
+            <button id="windPlayPause" class="mini-button" type="button">Pause wind</button>
+            <span id="windFrameLabel" class="wave-frame-label">wind model</span>
+          </div>
         </div>
         <div id="map" class="map"></div>
       </section>
@@ -87,6 +94,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>
