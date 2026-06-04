@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#071622" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="CaliSurf Light" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>CaliSurf Light</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="preconnect" href="https://server.arcgisonline.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -22,8 +22,8 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand-lockup">
-        <img class="app-logo" src="assets/icons/logo-white-192.png" alt="CaliSurf Light logo" />
+      <div class="brand-block">
+        <img class="app-logo" src="assets/icons/logo-white-transparent.png" alt="CaliSurf Light logo" />
         <div>
           <p class="eyebrow">west coast model V1</p>
           <h1>CaliSurf Light</h1>
@@ -32,15 +32,9 @@
       </div>
       <div class="top-actions">
         <button class="install-btn" id="installButton" hidden>Install app</button>
-        <div class="status-pill" id="globalStatus">Loading data…</div>
+        <div class="status-pill" id="globalStatus">Loading model…</div>
       </div>
     </header>
-
-    <div class="update-toast" id="updateToast" hidden>
-      <span>Update available.</span>
-      <button id="updateButton">Download update</button>
-      <button id="dismissUpdate" aria-label="Dismiss update notice">×</button>
-    </div>
 
     <main class="layout">
       <section class="map-card" aria-label="California surf map">
@@ -54,6 +48,20 @@
           <button class="chip" data-region="monterey-bay">Monterey Bay</button>
           <button class="chip" data-region="bay-area">Bay Area</button>
           <button class="chip" data-region="north-coast">North Coast</button>
+        </div>
+        <div class="map-control-strip" aria-label="Map visual controls">
+          <label class="mini-toggle"><input id="waveLayerToggle" type="checkbox" checked /> Wave layer</label>
+          <button id="wavePlayPause" class="mini-button" type="button">Pause</button>
+          <span id="waveFrameLabel" class="wave-frame-label">24h wave animation</span>
+          <label class="marker-mode-label">Spot color
+            <select id="markerColorMode">
+              <option value="rating">Poor → fair/good</option>
+              <option value="wave_size">Wave size</option>
+              <option value="morning">Morning good</option>
+              <option value="afternoon">Afternoon good</option>
+              <option value="evening">Evening good</option>
+            </select>
+          </label>
         </div>
         <div id="map" class="map"></div>
       </section>
@@ -69,6 +77,13 @@
         <div class="empty-state">Select a spot from the map or list.</div>
       </section>
     </main>
+  </div>
+
+  <div class="update-toast" id="updateToast" hidden>
+    <strong>Update available</strong>
+    <span>A newer CaliSurf Light version is ready.</span>
+    <button id="updateButton">Download update</button>
+    <button id="dismissUpdate" aria-label="Dismiss update notice">×</button>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>

@@ -6,12 +6,17 @@
     "accent": "#1bb8d4",
     "accent2": "#ff7f50"
   },
-  "marker_size": 9,
+  "marker_size": 7,
+  "marker_color_mode": "rating",
   "typography_scale": 1,
-  "corner_radius": 12,
-  "edge_buffer": 18,
+  "corner_radius": 8,
+  "edge_buffer": 22,
   "default_region": "san-diego",
   "layout": "full",
+  "wave_layer_enabled": true,
+  "wave_layer_opacity": 0.44,
+  "wave_animation_ms": 1150,
+  "show_wave_direction_arrows": true,
   "show_cards": {
     "swell": true,
     "wind": true,
@@ -20,6 +25,7 @@
     "confidence": true,
     "model": true,
     "hourly": true,
+    "five_day": true,
     "warnings": true
   },
   "show_swell_arrows": true,

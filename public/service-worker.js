@@ -1,14 +1,18 @@
-const CACHE_VERSION = 'calisurf-light-pwa-v1-2026-06-03';
+const CACHE_VERSION = 'calisurf-light-pwa-v2-wave-layer-2026-06-04';
 const APP_SHELL = [
   './',
   './index.html',
+  './admin.html',
   './styles.css',
   './app.js',
+  './admin.js',
   './manifest.webmanifest',
   './assets/icons/favicon.ico',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
-  './assets/icons/logo-white-192.png',
+  './assets/icons/maskable-192.png',
+  './assets/icons/maskable-512.png',
+  './assets/icons/logo-white-transparent.png',
   './assets/icons/apple-touch-icon.png'
 ];
 
@@ -33,10 +37,10 @@ async function networkFirst(request) {
     const fresh = await fetch(request);
     if (fresh && fresh.ok) cache.put(request, fresh.clone());
     return fresh;
-  } catch (_) {
+  } catch (error) {
     const cached = await cache.match(request);
     if (cached) return cached;
-    throw _;
+    throw error;
   }
 }
 

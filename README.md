@@ -1,51 +1,56 @@
-# CaliSurf Light
+# CaliSurf Light — west coast model V1.2
 
-**west coast model V1**
+Static California surf forecast app with a GitHub Actions forecast pipeline.
 
-A beginner-friendly, deployable California surf forecast app built from `california_surf_spots_full.csv`.
+## What is new in this update
 
-It includes:
+- Adds a semi-transparent **24-hour wave-height colorization layer** over the Esri Ocean Basemap.
+- Adds animated wave frames from `public/data/wave_grid_24h.json`.
+- Adds small swell-direction arrows inside the wave layer.
+- Extends spot forecasts to **5 days** of 3-hourly model snapshots.
+- Renames the hourly card to **30 hour snapshots**.
+- Adds a 5-column **5 day forecast** card.
+- Adds map marker color modes:
+  - poor → fair/good rating
+  - wave size
+  - morning-good window
+  - afternoon-good window
+  - evening-good window
+- Defaults to San Diego.
+- Removes spot count from the public header.
+- Removes bathy checkbox and map attribution text.
+- Keeps Esri Ocean Basemap as the visual base map.
+- Keeps PWA install/update support and the CaliSurf Light logo/favicon.
 
-- Public forecast page: `public/index.html`
-- Admin/aesthetic console: `public/admin.html`
-- PWA install support: `manifest.webmanifest` + `service-worker.js`
-- Custom logo/favicons/app icons from the supplied surfer/Vitruvian-style image
-- Python forecast pipeline: `scripts/run_forecast_pipeline.py`
-- GitHub Actions daily update workflow
-- Netlify static hosting support
+## Data files produced by GitHub Actions
 
----
-
-## PWA / Add to Home Screen
-
-The app is installable as **CaliSurf Light**.
-
-Files added:
-
-```text
-public/manifest.webmanifest
-public/service-worker.js
-public/assets/icons/favicon.ico
-public/assets/icons/apple-touch-icon.png
-public/assets/icons/icon-192.png
-public/assets/icons/icon-512.png
-public/assets/icons/maskable-192.png
-public/assets/icons/maskable-512.png
-```
-
-The service worker caches the app shell and uses network-first behavior for forecast JSON so the app can load quickly while still updating model data.
-
-When a new service worker is available, the public page shows:
+The workflow now commits:
 
 ```text
-Update available → Download update
+public/data/spots.json
+public/data/latest_forecasts.json
+public/data/wave_grid_24h.json
+public/data/site_config.json
 ```
 
-Tapping it activates the new version and reloads the app.
+`latest_forecasts.json` contains the spot-level forecast cards.
 
----
+`wave_grid_24h.json` contains lightweight regional grid frames used by the animated map overlay. The browser does not parse GRIB and does not call model APIs directly.
 
-## Admin login
+## Model strategy
+
+The app uses a two-level strategy:
+
+1. **Spot model:** NDBC/CDIP observations, Open-Meteo marine/wind guidance, NOAA CO-OPS tides, and empirical spot exposure/bathymetry coefficients.
+2. **Regional wave layer:** Open-Meteo Marine API wave-height and wave-direction fields on a reduced California offshore grid, exported as small JSON for browser animation.
+
+Open-Meteo is used as the easiest reliable Stage 1/2 model gateway because it exposes wave variables such as wave height, direction, period, swell wave height/direction/period, secondary swell, and GFS Wave/ECMWF/DWD/Météo-France wave-model sources through JSON. The higher-control upgrade is direct NOAA NOMADS GFS-Wave GRIB2 retrieval for variables such as `HTSGW`, `DIRPW`, and `PERPW`, using `cfgrib` or `wgrib2`; that should be done server-side in GitHub Actions and only derived JSON should be committed.
+
+## Source-code/modeling note for Ventusky/NREL-style maps
+
+I did not find public source code for Ventusky’s sea-map renderer or the NREL Marine Energy Atlas viewer that can simply be copied into this project. Instead, this app reproduces the useful pattern: fetch/model wave fields server-side, reduce them to a mobile-sized grid, then render a semi-transparent canvas color layer with arrows over the existing map. That avoids scraping or depending on another site’s proprietary front-end.
+
+## Admin aesthetic console
 
 Open:
 
@@ -53,82 +58,45 @@ Open:
 /admin.html
 ```
 
-Use:
+Login:
 
 ```text
-email: admin@calisurf.com
-password: bonitaindo26
+admin@calisurf.com
+bonitaindo26
 ```
 
-This is a static local gate, not true secure server authentication. For a real private admin later, use Supabase, Firebase Auth, Netlify Identity, or another backend.
+The static admin console can change marker size, marker color mode, corner radius, mobile buffer, wave-layer opacity, wave-layer arrows, card visibility, colors, layout, hidden spots, and local spot additions.
 
----
+Important: this is still a local/static admin gate. It saves to browser `localStorage` or lets you download `site_config.json`. True public live editing later needs Supabase, Firebase, Netlify Identity, or GitHub write integration.
 
-## Model sources
+## Deploy/update steps
 
-West coast model V1 uses:
+1. Upload/overwrite these files in GitHub.
+2. Commit the change.
+3. Netlify should redeploy because frontend files changed.
+4. Run:
 
-- Open-Meteo Marine API for wave forecast guidance.
-- Open-Meteo Weather API for real wind forecasts.
-- NDBC/CDIP realtime buoy observations as an observed anchor.
-- NOAA CO-OPS tide predictions.
-- Empirical California shelf/canyon/reef exposure coefficients in `spots.json`.
+```text
+Actions → Update surf forecasts → Run workflow
+```
 
-The browser does not run the model. GitHub Actions runs the Python pipeline and writes:
+5. Confirm these files changed:
 
 ```text
 public/data/latest_forecasts.json
+public/data/wave_grid_24h.json
 ```
 
----
+6. Open the site and hard refresh once.
 
-## Deploy / update steps
+If users have installed the PWA, they should see **Update available** when the new service worker is ready.
 
-1. Upload the project contents to GitHub.
-2. Let Netlify redeploy because frontend files changed.
-3. Go to **Actions → Update surf forecasts → Run workflow**.
-4. Wait for the workflow to turn green.
-5. Open your site and hard refresh.
-6. On mobile, use the install button if shown, or use browser Share → Add to Home Screen.
+## Future direct-GRIB upgrade
 
-The included `site_config.json` points forecast data to:
+For a production-grade version, keep this exact frontend JSON shape but replace the Open-Meteo wave grid generator with direct NOAA NOMADS GFS-Wave GRIB2 subset downloads:
 
-```text
-https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data
-```
+- Bbox: ~30.5°N–42.5°N, 125.5°W–116.0°W.
+- Variables: `HTSGW`, `DIRPW`, `PERPW`, plus swell partitions when needed.
+- Parser: `cfgrib + xarray`, fallback `wgrib2`.
+- Commit only reduced JSON, never raw GRIB.
 
-That lets the Netlify frontend receive updated forecast JSON from GitHub without requiring a Netlify rebuild every forecast run.
-
----
-
-## Local test
-
-```bash
-python -m pip install -r requirements.txt
-python scripts/build_spots_json.py
-python scripts/run_forecast_pipeline.py
-python -m http.server 8888 -d public
-```
-
-Open:
-
-```text
-http://localhost:8888
-```
-
-Offline model test:
-
-```bash
-SURF_PIPELINE_OFFLINE=1 python scripts/run_forecast_pipeline.py
-```
-
----
-
-## Netlify settings
-
-```text
-Build command: echo 'Static site: no build required'
-Publish directory: public
-```
-
-`netlify.toml` also sets service-worker and manifest cache headers.
