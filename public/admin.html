@@ -7,7 +7,7 @@
   <title>CaliSurf Light Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
     <section class="login-card">
       <p class="eyebrow">Aesthetic console</p>
       <h2>CaliSurf Light Admin</h2>
-      <p>Use Supabase email/password auth when configured. A local fallback remains available for setup/testing only.</p>
+      <p>Use Supabase email/password auth for live admin edits. If the status says local fallback, the public Supabase publishable key still needs to be written into site_config.json by the workflow or by a one-time GitHub edit.</p>
       <label>Email <input id="loginEmail" type="email" autocomplete="username" placeholder="admin@calisurf.com" /></label>
       <label>Password <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" /></label>
       <button class="primary-btn" id="loginButton">Log in</button>
@@ -100,7 +100,7 @@
           <button class="ghost-btn" id="downloadConfig">Download site_config.json</button>
           <button class="ghost-btn" id="resetConfig">Reset</button>
         </div>
-        <p class="notice">When Supabase is configured, this saves public site settings for everyone immediately. Without Supabase, it saves to this browser and can export site_config.json.</p>
+        <p class="notice">When Supabase is connected, Save settings writes directly to the site_settings table and the public app picks it up on reload. Without Supabase, this only previews/saves in your browser.</p>
       </section>
 
       <section class="admin-card">
@@ -117,7 +117,7 @@
           <button class="primary-btn" id="addSpot">Save spot</button>
           <button class="ghost-btn" id="downloadSpots">Download spots_override.json</button>
         </div>
-        <p class="notice">With Supabase configured, new spots are saved to the surf_spots table and are picked up by future model runs. Without Supabase, this is a browser-only override.</p>
+        <p class="notice">With Supabase connected, spot edits save directly to the surf_spots table and future forecast runs use them automatically. Without Supabase, this is a browser-only override.</p>
       </section>
 
       <section class="admin-card">

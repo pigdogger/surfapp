@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-ready. */
+/* CaliSurf Light admin console · Supabase-direct · v2.0. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -8,16 +8,16 @@
     theme: { bg: "#071622", panel: "#0e2434", accent: "#1bb8d4", accent2: "#ff7f50" },
     marker_size: 7,
     marker_color_mode: "rating",
-    typography_scale: 1,
+    typography_scale: 0.88,
     corner_radius: 8,
-    edge_buffer: 22,
-    mobile_detail_scale: 0.92,
+    edge_buffer: 16,
+    mobile_detail_scale: 0.70,
     wave_layer_enabled: true,
-    wave_layer_opacity: 0.44,
+    wave_layer_opacity: 0.26,
     show_wave_direction_arrows: true,
     wind_layer_enabled: true,
-    wind_layer_opacity: 0.70,
-    wind_particle_density: 1.0,
+    wind_layer_opacity: 0.86,
+    wind_particle_density: 1.45,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
     default_region: "san-diego",
@@ -43,10 +43,24 @@
     return out;
   }
 
-  async function fetchJson(name) {
-    const res = await fetch(`./data/${name}?_=${Date.now()}`, { cache: "no-store" });
+  async function fetchJson(name, base = "./data") {
+    const clean = String(base || "./data").replace(/\/$/, "");
+    const res = await fetch(`${clean}/${name}?_=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) throw new Error(name);
     return res.json();
+  }
+
+  async function loadSiteConfig() {
+    let cfg = structuredClone(DEFAULT_CONFIG);
+    try {
+      const local = await fetchJson("site_config.json");
+      cfg = mergeDeep(cfg, local);
+      const remoteBase = local?.data_base_url || cfg.data_base_url;
+      if (remoteBase && !String(remoteBase).startsWith("./")) {
+        try { cfg = mergeDeep(cfg, await fetchJson("site_config.json", remoteBase)); } catch (_) {}
+      }
+    } catch (_) {}
+    return cfg;
   }
 
   function slugify(value) {
@@ -78,7 +92,7 @@
     state.supabaseReady = false;
     state.supabase = null;
     if (!cfg.enabled || !cfg.url || !cfg.anon_key || !window.supabase) {
-      setAdminMode("Local fallback mode. Add Supabase keys to site_config.json for live admin publishing.", "warn");
+      setAdminMode("Local fallback mode. Supabase is not enabled in site_config yet; run the workflow with SUPABASE_ANON_KEY or paste the publishable key into site_config.json once.", "warn");
       return;
     }
     state.supabase = window.supabase.createClient(cfg.url, cfg.anon_key);
@@ -312,7 +326,9 @@
     if (state._loaded) return;
     state._loaded = true;
     try {
-      const [spots, fileConfig] = await Promise.all([fetchJson("spots.json"), fetchJson("site_config.json").catch(() => ({}))]);
+      const fileConfig = await loadSiteConfig();
+      const dataBase = fileConfig.data_base_url || "./data";
+      const [spots] = await Promise.all([fetchJson("spots.json", dataBase).catch(() => fetchJson("spots.json"))]);
       state.config = mergeDeep(DEFAULT_CONFIG, fileConfig);
       await initSupabaseFromConfig();
       let supabaseSpots = null, supabaseSettings = null;
@@ -329,7 +345,7 @@
   }
 
   async function prepareLogin() {
-    try { const fileConfig = await fetchJson("site_config.json").catch(() => ({})); state.config = mergeDeep(DEFAULT_CONFIG, fileConfig); await initSupabaseFromConfig(); if (state.supabaseReady && state.session) { setUnlocked(true); await initAdmin(); return; } } catch (err) { console.warn(err); }
+    try { const fileConfig = await loadSiteConfig(); state.config = mergeDeep(DEFAULT_CONFIG, fileConfig); await initSupabaseFromConfig(); if (state.supabaseReady && state.session) { setUnlocked(true); await initAdmin(); return; } } catch (err) { console.warn(err); }
     if (sessionStorage.getItem("calisurfAdminLoggedIn") === "1") { setUnlocked(true); await initAdmin(); } else setUnlocked(false);
   }
 

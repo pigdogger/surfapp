@@ -40,6 +40,7 @@ SPOTS_PATH = ROOT / "public" / "data" / "spots.json"
 OUT_PATH = ROOT / "public" / "data" / "latest_forecasts.json"
 WAVE_GRID_OUT_PATH = ROOT / "public" / "data" / "wave_grid_24h.json"
 WIND_GRID_OUT_PATH = ROOT / "public" / "data" / "wind_grid_latest.json"
+SITE_CONFIG_PATH = ROOT / "public" / "data" / "site_config.json"
 
 M_TO_FT = 3.28084
 MPS_TO_KT = 1.94384
@@ -193,6 +194,31 @@ def load_spots_from_supabase() -> Optional[List[Dict[str, Any]]]:
         print(f"Supabase spot pull failed, using static spots.json: {type(exc).__name__}: {exc}")
         return None
 
+
+
+def write_public_supabase_config_if_available() -> None:
+    """Publish the safe Supabase URL + anon key into site_config.json.
+
+    GitHub Secrets are not available to browser JavaScript. The service-role key
+    must stay secret, but the Supabase URL and anon/publishable key are meant to
+    be public when RLS policies are configured. This lets /admin.html use real
+    Supabase auth and lets the public app read site_settings/surf_spots.
+    """
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    anon = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not anon:
+        return
+    try:
+        cfg: Dict[str, Any] = {}
+        if SITE_CONFIG_PATH.exists():
+            cfg = json.loads(SITE_CONFIG_PATH.read_text(encoding="utf-8"))
+        cfg["supabase"] = {"enabled": True, "url": url, "anon_key": anon}
+        # Keep raw-GitHub data mode enabled so forecast JSON updates do not need a Netlify rebuild.
+        cfg.setdefault("data_base_url", "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data")
+        SITE_CONFIG_PATH.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+        print("Wrote public Supabase URL/anon key to site_config.json for admin/public settings.")
+    except Exception as exc:
+        print(f"Could not update site_config.json with Supabase public config: {type(exc).__name__}: {exc}")
 
 # ---------------------------------------------------------------------------
 # NDBC / CDIP realtime buoy observations
@@ -1064,16 +1090,13 @@ def frange(start: float, stop: float, step: float) -> List[float]:
 
 
 def california_wave_grid_points() -> List[Dict[str, float]]:
-    """Coarse California + adjacent Pacific grid. Kept intentionally small for mobile JSON."""
-    lats = frange(30.5, 42.5, 1.0)
-    lons = frange(-125.5, -117.5, 1.0)
+    """Nearshore/offshore Pacific grid for a smooth wave-height raster layer."""
     pts: List[Dict[str, float]] = []
-    for lat in lats:
-        for lon in lons:
-            # Avoid painting too far inland/east. Open-Meteo cell_selection=sea will still snap nearshore points to sea.
-            if lon > -118.2 and lat > 33.8:
-                continue
-            pts.append({"lat": lat, "lon": lon})
+    for lat in frange(30.5, 42.5, 0.5):
+        coast = approx_coast_lon(lat)
+        # Wave field should live mostly offshore, not over inland California.
+        for lon in frange(coast - 4.2, coast - 0.15, 0.5):
+            pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
     return pts
 
 
@@ -1100,7 +1123,7 @@ def synthetic_wave_grid(generated_at: dt.datetime, status: str = "wave_grid:fall
         "model": "calisurf-wave-grid-v1",
         "source": status,
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
-        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -125.5, "lon_max": -117.5},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
         "warnings": [status] if "fallback" in status or "offline" in status or "failed" in status else [],
     }
@@ -1172,17 +1195,38 @@ def fetch_wave_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
         "model": "calisurf-wave-grid-v1",
         "source": "Open-Meteo Marine API best-match wave model grid; drawn client-side as semitransparent wave-height colorization",
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
-        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -125.5, "lon_max": -117.5},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
         "warnings": warnings,
     }
 
 
+def approx_coast_lon(lat: float) -> float:
+    curve = [
+        (32.5, -117.2), (33.2, -117.6), (34.0, -118.4), (34.6, -120.0),
+        (35.4, -121.1), (36.4, -121.9), (37.6, -122.6), (38.6, -123.1),
+        (40.0, -124.1), (41.6, -124.2), (42.2, -124.2),
+    ]
+    if lat <= curve[0][0]:
+        return curve[0][1]
+    for i in range(1, len(curve)):
+        a, b = curve[i - 1], curve[i]
+        if lat <= b[0]:
+            t = (lat - a[0]) / (b[0] - a[0])
+            return a[1] + (b[1] - a[1]) * t
+    return curve[-1][1]
+
+
 def california_wind_grid_points() -> List[Dict[str, float]]:
-    """Coarse land+nearshore grid for Windy-style particle lines."""
-    lats = frange(30.5, 42.5, 1.0)
-    lons = frange(-125.5, -116.5, 1.0)
-    return [{"lat": lat, "lon": lon} for lat in lats for lon in lons]
+    """Coastal-corridor wind grid; avoids painting wind across the whole continent."""
+    pts: List[Dict[str, float]] = []
+    for lat in frange(30.5, 42.5, 0.5):
+        coast = approx_coast_lon(lat)
+        # Dense coastal/offshore strip only. This gives a local-looking display
+        # while keeping GitHub Action and mobile JSON payloads small.
+        for lon in frange(coast - 3.4, coast + 0.25, 0.5):
+            pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
+    return pts
 
 
 def synthetic_wind_grid(generated_at: dt.datetime, status: str = "wind_grid:fallback_synthetic") -> Dict[str, Any]:
@@ -1205,7 +1249,7 @@ def synthetic_wind_grid(generated_at: dt.datetime, status: str = "wind_grid:fall
         "model": "calisurf-wind-grid-v1",
         "source": status,
         "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
-        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -125.5, "lon_max": -116.5},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
         "warnings": [status] if "fallback" in status or "offline" in status or "failed" in status else [],
     }
@@ -1267,10 +1311,37 @@ def fetch_wind_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
         "model": "calisurf-wind-grid-v1",
         "source": "Open-Meteo Weather Forecast API best-match 10 m wind grid; set OPEN_METEO_WIND_MODELS to force HRRR/GFS where supported",
         "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
-        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -125.5, "lon_max": -116.5},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
         "warnings": warnings,
     }
+
+
+def update_site_config_from_env() -> None:
+    """Expose only public Supabase settings to the static app.
+
+    The service-role key stays in GitHub Actions secrets and is never written.
+    The publishable/anon key is intentionally public so the browser can use
+    Supabase Auth and RLS-protected reads/writes.
+    """
+    try:
+        cfg = json.loads(SITE_CONFIG_PATH.read_text(encoding="utf-8")) if SITE_CONFIG_PATH.exists() else {}
+    except Exception:
+        cfg = {}
+    cfg.setdefault("data_base_url", "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data")
+    # Safer mobile/default settings from v1.9.
+    cfg.setdefault("typography_scale", 0.92)
+    cfg.setdefault("mobile_detail_scale", 0.78)
+    cfg.setdefault("edge_buffer", 16)
+    cfg.setdefault("wave_layer_opacity", 0.32)
+    cfg.setdefault("wind_layer_opacity", 0.86)
+    cfg.setdefault("wind_particle_density", 1.45)
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    supabase_anon = os.environ.get("SUPABASE_ANON_KEY", "")
+    if supabase_url and supabase_anon:
+        cfg["supabase"] = {"enabled": True, "url": supabase_url, "anon_key": supabase_anon}
+    SITE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SITE_CONFIG_PATH.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -1283,6 +1354,7 @@ def main() -> None:
 
     if not args.spots.exists():
         raise SystemExit(f"Missing {args.spots}. Run scripts/build_spots_json.py first.")
+    write_public_supabase_config_if_available()
     static_spots = json.loads(args.spots.read_text())
     supabase_spots = load_spots_from_supabase()
     if supabase_spots:
@@ -1295,6 +1367,7 @@ def main() -> None:
         active_spots = active_spots[: args.limit]
 
     generated_at = now_utc()
+    update_site_config_from_env()
     print(f"Fetching batched model guidance for {len(active_spots)} active spots...")
     fetch_open_meteo_models(active_spots)
     if MODEL_FETCH_WARNINGS:

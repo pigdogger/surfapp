@@ -1,23 +1,23 @@
-/* CaliSurf Light public app · west coast model V1.8 · no build step. */
+/* CaliSurf Light public app · west coast model V2.0 · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
     theme: { bg: "#071622", panel: "#0e2434", accent: "#1bb8d4", accent2: "#ff7f50" },
     marker_size: 7,
     marker_color_mode: "rating",
-    typography_scale: 1,
+    typography_scale: 0.88,
     corner_radius: 8,
-    edge_buffer: 22,
-    mobile_detail_scale: 0.92,
+    edge_buffer: 16,
+    mobile_detail_scale: 0.70,
     layout: "full",
     default_region: "san-diego",
     wave_layer_enabled: true,
-    wave_layer_opacity: 0.44,
+    wave_layer_opacity: 0.26,
     wave_animation_ms: 1150,
     show_wave_direction_arrows: true,
     wind_layer_enabled: true,
-    wind_layer_opacity: 0.70,
-    wind_particle_density: 1.0,
+    wind_layer_opacity: 0.86,
+    wind_particle_density: 1.45,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
     supabase: { enabled: false, url: "", anon_key: "" },
@@ -93,7 +93,17 @@
 
   async function loadConfig() {
     let config = clone(DEFAULT_CONFIG);
-    try { config = mergeDeep(config, await fetchJson("./data", "site_config.json")); } catch (_) {}
+    try {
+      const localConfig = await fetchJson("./data", "site_config.json");
+      config = mergeDeep(config, localConfig);
+      // Forecast-only GitHub Action commits use [skip netlify], so pull the raw GitHub
+      // config too. This lets Supabase URL/anon-key and aesthetic settings update
+      // without a Netlify rebuild.
+      const remoteBase = localConfig?.data_base_url || config.data_base_url;
+      if (remoteBase && !String(remoteBase).startsWith("./")) {
+        try { config = mergeDeep(config, await fetchJson(remoteBase, "site_config.json")); } catch (_) {}
+      }
+    } catch (_) {}
     try {
       const fromAdmin = JSON.parse(localStorage.getItem("surfAppAdminConfig") || "null");
       if (fromAdmin) config = mergeDeep(config, fromAdmin);
@@ -134,10 +144,17 @@
 
   function filteredSpots() {
     const q = state.search.trim().toLowerCase();
-    return activeSpots().filter(s => {
+    const base = activeSpots().filter(s => {
       const qOk = !q || s.name.toLowerCase().includes(q) || (s.region || "").toLowerCase().includes(q);
       return regionMatch(s) && qOk;
     });
+    // If a map click selects a spot outside the active region, keep it visible at
+    // the top of the list so the map selection and list selection stay synced.
+    if (!q && state.selectedId && !base.some(s => s.id === state.selectedId)) {
+      const selected = activeSpots().find(s => s.id === state.selectedId);
+      if (selected) return [selected, ...base];
+    }
+    return base;
   }
 
   function mapSpots() {
@@ -258,7 +275,7 @@
     state.markers.clear();
     mapSpots().forEach(spot => {
       const marker = L.marker([spot.lat, spot.lon], { icon: markerIcon(spot), title: spot.name });
-      marker.on("click", () => preservePagePosition(() => selectSpot(spot.id, true, false)));
+      marker.on("click", () => preservePagePosition(() => selectSpot(spot.id, true, true)));
       marker.addTo(state.markerLayer);
       state.markers.set(spot.id, marker);
     });
@@ -321,43 +338,71 @@
     if (!ctx || !canvas || !map) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const frame = currentWaveFrame();
-    if (!frame || !Array.isArray(frame.points)) return;
-    const opacity = Math.max(0, Math.min(0.85, Number(state.config.wave_layer_opacity ?? 0.44)));
-    const t = performance.now() / 1000;
+    if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
+    const opacity = Math.max(0, Math.min(0.78, Number(state.config.wave_layer_opacity ?? 0.26)));
+    const phase = (performance.now() / 1000) % 1000;
+
+    // Draw a soft gridded/raster field instead of radial "orb" blobs.
+    // Each model point paints a small lat/lon cell; canvas blur blends the cells
+    // into a continuous Windy/Ventusky-like color layer.
     ctx.save();
     ctx.globalAlpha = opacity;
-    const zoom = map.getZoom();
-    const baseRadius = Math.max(24, Math.min(74, zoom * 5.1));
+    ctx.globalCompositeOperation = "source-over";
+    ctx.filter = window.innerWidth < 760 ? "blur(6px)" : "blur(9px)";
+    const spacing = estimateGridSpacing(frame.points);
     for (const p of frame.points) {
-      const pt = map.latLngToContainerPoint([p.lat, p.lon]);
-      const pulse = 0.92 + 0.10 * Math.sin(t * 2.4 + Number(p.lat || 0) * .73 + Number(p.lon || 0) * .31);
-      const radius = baseRadius * pulse;
-      if (pt.x < -radius || pt.y < -radius || pt.x > canvas.width + radius || pt.y > canvas.height + radius) continue;
-      const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, radius);
-      const color = waveColor(p.height_ft);
-      grad.addColorStop(0, color);
-      grad.addColorStop(0.72, hexToRgba(color, 0.55));
-      grad.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = grad;
+      const lat = Number(p.lat), lon = Number(p.lon);
+      const dx = spacing.lon * 0.58;
+      const dy = spacing.lat * 0.58;
+      const corners = [
+        map.latLngToContainerPoint([lat - dy, lon - dx]),
+        map.latLngToContainerPoint([lat - dy, lon + dx]),
+        map.latLngToContainerPoint([lat + dy, lon + dx]),
+        map.latLngToContainerPoint([lat + dy, lon - dx])
+      ];
+      if (corners.every(pt => pt.x < -40 || pt.x > canvas.width + 40 || pt.y < -40 || pt.y > canvas.height + 40)) continue;
+      ctx.fillStyle = waveColor(p.height_ft);
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+      corners.forEach((pt, i) => { if (i) ctx.lineTo(pt.x, pt.y); else ctx.moveTo(pt.x, pt.y); });
+      ctx.closePath();
       ctx.fill();
     }
     ctx.restore();
 
+    // Subtle directional streaks that animate within the fixed hourly frame.
     if (state.config.show_wave_direction_arrows === false) return;
     ctx.save();
-    ctx.globalAlpha = Math.min(0.76, opacity + 0.18);
-    ctx.strokeStyle = "rgba(255,255,255,.82)";
-    ctx.fillStyle = "rgba(255,255,255,.82)";
-    ctx.lineWidth = 1.3;
+    ctx.globalAlpha = Math.min(0.72, opacity + 0.16);
+    ctx.strokeStyle = "rgba(255,255,255,.72)";
+    ctx.fillStyle = "rgba(255,255,255,.72)";
+    ctx.lineWidth = window.innerWidth < 760 ? 1.0 : 1.15;
     frame.points.forEach((p, i) => {
-      if (i % 3 !== 0 || p.direction_deg == null) return;
+      if (i % (window.innerWidth < 760 ? 3 : 2) !== 0 || p.direction_deg == null) return;
       const pt = map.latLngToContainerPoint([p.lat, p.lon]);
       if (pt.x < 0 || pt.y < 0 || pt.x > canvas.width || pt.y > canvas.height) return;
-      drawWaveArrow(ctx, pt.x, pt.y, p.direction_deg, Math.max(9, Math.min(18, 5 + Number(p.height_ft || 0) * 2)));
+      const drift = 5 * Math.sin(phase * 1.8 + Number(p.lat) * .7 + Number(p.lon) * .3);
+      drawWaveArrow(ctx, pt.x + drift, pt.y + drift * .35, p.direction_deg, Math.max(9, Math.min(18, 5 + Number(p.height_ft || 0) * 2)));
     });
     ctx.restore();
+  }
+
+  function estimateGridSpacing(points) {
+    const lats = [...new Set(points.map(p => Number(p.lat)).filter(Number.isFinite))].sort((a, b) => a - b);
+    const lons = [...new Set(points.map(p => Number(p.lon)).filter(Number.isFinite))].sort((a, b) => a - b);
+    const latStep = medianStep(lats) || 1;
+    const lonStep = medianStep(lons) || 1;
+    return { lat: latStep, lon: lonStep };
+  }
+
+  function medianStep(values) {
+    const steps = [];
+    for (let i = 1; i < values.length; i++) {
+      const d = Math.abs(values[i] - values[i - 1]);
+      if (d > 0.0001) steps.push(d);
+    }
+    if (!steps.length) return null;
+    steps.sort((a, b) => a - b);
+    return steps[Math.floor(steps.length / 2)];
   }
 
   function drawWaveArrow(ctx, x, y, fromDeg, len) {
@@ -462,37 +507,100 @@
     state.windParticles = Array.from({ length: count }, () => newWindParticle(canvas));
   }
 
-  function newWindParticle(canvas) {
-    return { x: Math.random() * canvas.width, y: Math.random() * canvas.height, age: Math.random() * 70, maxAge: 45 + Math.random() * 55 };
+  function visibleWindAnchors(canvas, map) {
+    const frame = currentWindFrame();
+    const pts = frame?.points || [];
+    if (!pts.length || !map) return [];
+    return pts.filter(p => {
+      const lat = Number(p.lat), lon = Number(p.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+      if (!isNearPacificCoast(lat, lon)) return false;
+      const pt = map.latLngToContainerPoint([lat, lon]);
+      return pt.x > -120 && pt.y > -120 && pt.x < canvas.width + 120 && pt.y < canvas.height + 120;
+    });
+  }
+
+  function approxCoastLon(lat) {
+    // Lightweight California coastline approximation for display masking only.
+    const curve = [
+      [32.5, -117.2], [33.2, -117.6], [34.0, -118.4], [34.6, -120.0],
+      [35.4, -121.1], [36.4, -121.9], [37.6, -122.6], [38.6, -123.1],
+      [40.0, -124.1], [41.6, -124.2], [42.2, -124.2]
+    ];
+    if (lat <= curve[0][0]) return curve[0][1];
+    for (let i = 1; i < curve.length; i++) {
+      const a = curve[i - 1], b = curve[i];
+      if (lat <= b[0]) {
+        const t = (lat - a[0]) / (b[0] - a[0]);
+        return a[1] + (b[1] - a[1]) * t;
+      }
+    }
+    return curve[curve.length - 1][1];
+  }
+
+  function isNearPacificCoast(lat, lon) {
+    const coast = approxCoastLon(Number(lat));
+    // Keep wind display near the Pacific coastal corridor; do not paint the whole continent.
+    return lon >= coast - 4.2 && lon <= coast + 0.45;
   }
 
   function windVectorAt(lat, lon) {
     const frame = currentWindFrame();
     const pts = frame?.points || [];
-    if (!pts.length) return null;
-    let best = null, bestD = Infinity;
+    if (!pts.length || !isNearPacificCoast(lat, lon)) return null;
+    const nearest = [];
     for (const p of pts) {
+      if (!isNearPacificCoast(Number(p.lat), Number(p.lon))) continue;
       const d = Math.pow(Number(p.lat) - lat, 2) + Math.pow(Number(p.lon) - lon, 2);
-      if (d < bestD) { bestD = d; best = p; }
+      nearest.push({ p, d });
     }
-    return best;
+    nearest.sort((a, b) => a.d - b.d);
+    if (!nearest.length || nearest[0].d > 0.75) return null;
+    let u = 0, v = 0, wsum = 0, speedSum = 0;
+    for (const item of nearest.slice(0, 4)) {
+      const p = item.p;
+      const speed = Math.max(0, Number(p.speed_kt || 0));
+      const dir = Number(p.direction_deg);
+      if (!Number.isFinite(speed) || !Number.isFinite(dir)) continue;
+      const rad = (270 - dir) * Math.PI / 180;
+      const w = 1 / Math.max(0.015, item.d);
+      u += Math.cos(rad) * speed * w;
+      v += Math.sin(rad) * speed * w;
+      speedSum += speed * w;
+      wsum += w;
+    }
+    if (!wsum) return null;
+    const speed = Math.hypot(u / wsum, v / wsum);
+    const dir = (270 - Math.atan2(v / wsum, u / wsum) * 180 / Math.PI + 360) % 360;
+    return { speed_kt: speed || speedSum / wsum, direction_deg: dir };
+  }
+
+  function newWindParticle(canvas) {
+    const anchors = visibleWindAnchors(canvas, state.map);
+    if (anchors.length && state.map) {
+      const a = anchors[Math.floor(Math.random() * anchors.length)];
+      const jitterLat = (Math.random() - .5) * .45;
+      const jitterLon = (Math.random() - .5) * .70;
+      const pt = state.map.latLngToContainerPoint([Number(a.lat) + jitterLat, Number(a.lon) + jitterLon]);
+      return { x: pt.x, y: pt.y, age: Math.random() * 70, maxAge: 36 + Math.random() * 48 };
+    }
+    return { x: Math.random() * canvas.width, y: Math.random() * canvas.height, age: Math.random() * 70, maxAge: 45 + Math.random() * 55 };
   }
 
   function drawWindLayerCanvas(ctx, canvas, map) {
     if (!ctx || !canvas || !map) return;
     const frame = currentWindFrame();
     ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "rgba(6,18,27,.08)";
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "rgba(0,0,0,.13)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
     resetWindParticles();
-    const opacity = Math.max(.15, Math.min(.95, Number(state.config.wind_layer_opacity ?? .70)));
+    const opacity = Math.max(.15, Math.min(.95, Number(state.config.wind_layer_opacity ?? .86)));
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.lineWidth = window.innerWidth < 760 ? 1.0 : 1.25;
-    ctx.strokeStyle = "rgba(255,255,255,.78)";
+    ctx.lineWidth = window.innerWidth < 760 ? 1.05 : 1.35;
     for (const p of state.windParticles) {
       if (p.age++ > p.maxAge || p.x < -10 || p.y < -10 || p.x > canvas.width + 10 || p.y > canvas.height + 10) Object.assign(p, newWindParticle(canvas));
       const ll = map.containerPointToLatLng([p.x, p.y]);
@@ -501,9 +609,10 @@
       const speed = Math.max(1, Number(wind.speed_kt || 4));
       const motionDeg = (Number(wind.direction_deg) + 180) % 360;
       const rad = (motionDeg - 90) * Math.PI / 180;
-      const step = Math.max(0.65, Math.min(5.6, speed * 0.105 * (window.innerWidth < 760 ? .82 : 1)));
+      const step = Math.max(0.55, Math.min(4.8, speed * 0.115 * (window.innerWidth < 760 ? .80 : 1)));
       const nx = p.x + Math.cos(rad) * step;
       const ny = p.y + Math.sin(rad) * step;
+      ctx.strokeStyle = speed <= 6 ? "rgba(130,245,210,.78)" : speed <= 13 ? "rgba(255,225,122,.74)" : "rgba(255,160,112,.72)";
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
@@ -561,13 +670,13 @@
     list.querySelectorAll(".spot-row").forEach(btn => btn.addEventListener("click", e => { e.preventDefault(); btn.blur(); preservePagePosition(() => selectSpot(btn.dataset.id, true, false)); }));
   }
 
-  function scrollSelectedSpotIntoView() {
-    if (state.config.auto_scroll_selected_list !== true) return;
+  function scrollSelectedSpotIntoView(force = false) {
+    if (!force && state.config.auto_scroll_selected_list !== true) return;
     const row = document.querySelector(`.spot-row[data-id="${CSS.escape(state.selectedId || "")}"]`);
     const list = $("spotList");
     if (row && list) {
       const target = row.offsetTop - list.clientHeight / 2 + row.clientHeight / 2;
-      list.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+      list.scrollTo({ top: Math.max(0, target), behavior: "auto" });
     }
   }
 
@@ -576,7 +685,7 @@
     renderSpotList();
     refreshMarkerIcons();
     renderForecast();
-    if (scrollList && state.config.auto_scroll_selected_list === true) setTimeout(scrollSelectedSpotIntoView, 40);
+    if (scrollList || state.config.auto_scroll_selected_list === true) setTimeout(() => scrollSelectedSpotIntoView(!!scrollList), 40);
     if (panMap && state.map) {
       const spot = allSpots().find(s => s.id === spotId);
       if (spot) state.map.setView([spot.lat, spot.lon], Math.max(state.map.getZoom(), 10), { animate: true });
@@ -769,6 +878,7 @@
     $("markerColorMode")?.addEventListener("change", e => {
       state.config.marker_color_mode = e.target.value;
       refreshMarkerIcons();
+      renderSpotList();
     });
   }
 

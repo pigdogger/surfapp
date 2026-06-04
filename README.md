@@ -1,8 +1,21 @@
 # CaliSurf Light
 
-**west coast model V1.8**
+**west coast model V2.0**
 
-Static Netlify surf app + GitHub Actions forecast pipeline + optional Supabase admin backend.
+Static Netlify surf app + GitHub Actions forecast pipeline + Supabase-ready admin backend.
+
+
+## V2.0 visual/admin/mobile hotfix
+
+This update addresses the post-deploy issues visible on mobile and desktop:
+
+- Replaces the orb-style wave layer with a smoother raster/cell-based semi-transparent wave field.
+- Makes the wind visualization coastal/hyperlocal by limiting particles to the California coastal corridor and interpolating nearby wind-grid points instead of painting the entire continent.
+- Selecting a spot on the map now highlights and centers the matching spot row inside the spot list without scrolling the whole page.
+- Makes mobile forecast/detail typography leaner and smaller by default.
+- Makes the 5-day forecast explicitly horizontal-scroll on mobile, while widening desktop day columns so surf heights stay on one line.
+- Pulls raw GitHub `site_config.json` in addition to the Netlify copy so forecast-action updates to settings can be seen without a Netlify rebuild.
+- GitHub Actions now writes the public Supabase URL + publishable key into `site_config.json` when `SUPABASE_URL` and `SUPABASE_ANON_KEY` secrets exist. The service-role key is never written to the frontend.
 
 ## What this update fixes
 
@@ -43,10 +56,11 @@ Trigger a Netlify deploy if it does not redeploy automatically, then hard-refres
 
 ```text
 SUPABASE_URL
+SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
-6. Put your public anon key into `public/data/site_config.json`:
+6. Run the forecast workflow once. It will write the public Supabase URL + publishable key into `public/data/site_config.json` automatically. Manual fallback: put your public publishable key into `public/data/site_config.json`:
 
 ```json
 "supabase": {
@@ -60,4 +74,4 @@ Once configured, admin changes to GPS, spot names, active/hidden state, marker s
 
 ## Model note
 
-This version includes working JSON-based wave and wind visual layers. The current production-safe gateway uses Open-Meteo model APIs plus existing NDBC/CDIP and NOAA CO-OPS ingestion. The direct NOAA HRRR/RAP/GFS/GFS-Wave GRIB2 implementation is still the next deeper model upgrade; the app and pipeline are structured so only derived JSON goes to the frontend.
+This version includes working JSON-based wave and wind visual layers with a smoother wave raster and coastal-corridor wind particles. The current production-safe gateway uses Open-Meteo model APIs plus existing NDBC/CDIP and NOAA CO-OPS ingestion. The direct NOAA HRRR/RAP/GFS/GFS-Wave GRIB2 implementation is still the next deeper model upgrade; the app and pipeline are structured so only derived JSON goes to the frontend.
