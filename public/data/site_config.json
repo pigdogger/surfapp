@@ -43,5 +43,6 @@
     "url": "",
     "anon_key": ""
   },
-  "auto_center_nearest_beaches": true
+  "auto_center_nearest_beaches": true,
+  "pinned_spot_ids": []
 }

@@ -1,4 +1,4 @@
-/* CaliSurf Light public app · west coast model V2.1 · no build step. */
+/* CaliSurf Light public app · west coast model V2.2 · pinned spots · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
@@ -26,6 +26,7 @@
     show_swell_arrows: true,
     show_wind_arrows: true,
     hidden_spot_ids: [],
+    pinned_spot_ids: [],
     added_spots: []
   };
 
@@ -66,6 +67,7 @@
     windAnchorCache: null,
     waveRasterCache: null,
     userLocation: null,
+    userPinnedSpotIds: [],
     markers: new Map(),
     supabaseClient: null,
     deferredInstall: null,
@@ -148,13 +150,14 @@
 
   function filteredSpots() {
     const q = state.search.trim().toLowerCase();
+    const pins = pinnedIdSet();
     const base = activeSpots().filter(s => {
       const qOk = !q || s.name.toLowerCase().includes(q) || (s.region || "").toLowerCase().includes(q);
-      return regionMatch(s) && qOk;
+      return !pins.has(s.id) && regionMatch(s) && qOk;
     });
-    // If a map click selects a spot outside the active region, keep it visible at
+    // If a map click selects a non-pinned spot outside the active region, keep it visible at
     // the top of the list so the map selection and list selection stay synced.
-    if (!q && state.selectedId && !base.some(s => s.id === state.selectedId)) {
+    if (!q && state.selectedId && !pins.has(state.selectedId) && !base.some(s => s.id === state.selectedId)) {
       const selected = activeSpots().find(s => s.id === state.selectedId);
       if (selected) return [selected, ...base];
     }
@@ -164,6 +167,43 @@
   function mapSpots() {
     // Always show every active spot on the map. Region selection only dims spots outside the selected region.
     return activeSpots();
+  }
+
+  function loadUserPins() {
+    try {
+      const raw = JSON.parse(localStorage.getItem("calisurfPinnedSpotIds") || "[]");
+      state.userPinnedSpotIds = Array.isArray(raw) ? raw.filter(Boolean) : [];
+    } catch (_) { state.userPinnedSpotIds = []; }
+  }
+
+  function saveUserPins() {
+    localStorage.setItem("calisurfPinnedSpotIds", JSON.stringify([...new Set(state.userPinnedSpotIds || [])]));
+  }
+
+  function pinnedIdSet() {
+    return new Set([...(state.config.pinned_spot_ids || []), ...(state.userPinnedSpotIds || [])]);
+  }
+
+  function orderedPinnedIds() {
+    return [...new Set([...(state.config.pinned_spot_ids || []), ...(state.userPinnedSpotIds || [])])];
+  }
+
+  function isPinned(spotId) { return pinnedIdSet().has(spotId); }
+
+  function pinnedSpots() {
+    const byId = new Map(activeSpots().map(s => [s.id, s]));
+    return orderedPinnedIds().map(id => byId.get(id)).filter(Boolean);
+  }
+
+  function toggleUserPin(spotId) {
+    const sitePinned = new Set(state.config.pinned_spot_ids || []);
+    const userSet = new Set(state.userPinnedSpotIds || []);
+    if (userSet.has(spotId)) userSet.delete(spotId);
+    else if (!sitePinned.has(spotId)) userSet.add(spotId);
+    else alert("This spot is pinned site-wide from the admin page.");
+    state.userPinnedSpotIds = [...userSet];
+    saveUserPins();
+    renderSpotList();
   }
 
   function preservePagePosition(fn) {
@@ -788,7 +828,37 @@
     if (el) el.textContent = frame ? `wind ${fmtDateTime(frame.time)}` : "wind model";
   }
 
+  function renderPinnedSpotList() {
+    const tray = $("pinnedSpotTray");
+    if (!tray) return;
+    const pins = pinnedSpots();
+    if (!pins.length) {
+      tray.hidden = true;
+      tray.innerHTML = "";
+      document.querySelector(".side-panel")?.classList.remove("has-pins");
+      return;
+    }
+    tray.hidden = false;
+    document.querySelector(".side-panel")?.classList.add("has-pins");
+    tray.innerHTML = `<div class="pinned-label">Pinned</div><div class="pinned-strip">${pins.map(spot => {
+      const height = forecastFor(spot.id)?.surf_height_ft?.human || "—";
+      const dotColor = markerColorFor(spot.id);
+      const sitePinned = new Set(state.config.pinned_spot_ids || []).has(spot.id);
+      return `<div class="pinned-card ${spot.id === state.selectedId ? "is-active" : ""}" role="button" tabindex="0" data-id="${escapeHtml(spot.id)}" title="${escapeHtml(spot.name)}">
+        <i class="spot-color-dot" style="--dot-color:${dotColor}"></i><strong>${escapeHtml(spot.name)}</strong><em>${escapeHtml(height)}</em>${sitePinned ? `<span class="pin-source">site</span>` : `<button class="pin-remove" type="button" data-unpin="${escapeHtml(spot.id)}" aria-label="Unpin ${escapeHtml(spot.name)}">×</button>`}
+      </div>`;
+    }).join("")}</div>`;
+    tray.querySelectorAll(".pinned-card").forEach(card => {
+      card.addEventListener("click", e => { e.preventDefault(); card.blur(); preservePagePosition(() => selectSpot(card.dataset.id, true, false)); });
+      card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); preservePagePosition(() => selectSpot(card.dataset.id, true, false)); } });
+    });
+    tray.querySelectorAll(".pin-remove").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation(); btn.blur(); preservePagePosition(() => toggleUserPin(btn.dataset.unpin));
+    }));
+  }
+
   function renderSpotList() {
+    renderPinnedSpotList();
     const list = $("spotList");
     const spots = filteredSpots();
     list.innerHTML = spots.map(spot => {
@@ -796,12 +866,19 @@
       const height = fc?.surf_height_ft?.human || "—";
       const rating = fc?.rating || "loading";
       const dotColor = markerColorFor(spot.id);
-      return `<button class="spot-row ${spot.id === state.selectedId ? "is-active" : ""}" data-id="${spot.id}">
+      const pinned = isPinned(spot.id);
+      return `<div class="spot-row ${spot.id === state.selectedId ? "is-active" : ""}" role="button" tabindex="0" data-id="${escapeHtml(spot.id)}">
         <span class="spot-row-main"><i class="spot-color-dot" style="--dot-color:${dotColor}"></i><span><strong>${escapeHtml(spot.name)}</strong><small>${escapeHtml(spot.region || "California")} · ${escapeHtml(rating)}</small></span></span>
-        <span class="height-badge">${escapeHtml(height)}</span>
-      </button>`;
+        <span class="row-actions"><span class="height-badge">${escapeHtml(height)}</span><button class="pin-toggle ${pinned ? "is-pinned" : ""}" type="button" data-pin="${escapeHtml(spot.id)}" aria-label="${pinned ? "Pinned" : "Pin"} ${escapeHtml(spot.name)}" title="${pinned ? "Pinned" : "Pin spot"}">${pinned ? "★" : "☆"}</button></span>
+      </div>`;
     }).join("") || `<div class="empty-state">No spots match this filter.</div>`;
-    list.querySelectorAll(".spot-row").forEach(btn => btn.addEventListener("click", e => { e.preventDefault(); btn.blur(); preservePagePosition(() => selectSpot(btn.dataset.id, true, false)); }));
+    list.querySelectorAll(".spot-row").forEach(row => {
+      row.addEventListener("click", e => { e.preventDefault(); row.blur(); preservePagePosition(() => selectSpot(row.dataset.id, true, false)); });
+      row.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); preservePagePosition(() => selectSpot(row.dataset.id, true, false)); } });
+    });
+    list.querySelectorAll(".pin-toggle").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation(); btn.blur(); preservePagePosition(() => toggleUserPin(btn.dataset.pin));
+    }));
   }
 
   function scrollSelectedSpotIntoView(force = false) {
@@ -1168,6 +1245,7 @@
       setupInstallPrompt();
       setupServiceWorker();
       await loadConfig();
+      loadUserPins();
       const dataBase = state.config.data_base_url || "./data";
       const [spots, latest, waveGrid, windGrid] = await Promise.all([
         fetchJson(dataBase, "spots.json"),

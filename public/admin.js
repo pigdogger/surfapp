@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-direct · v2.1. */
+/* CaliSurf Light admin console · Supabase-direct · v2.2 pinned spots. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -27,6 +27,7 @@
     show_swell_arrows: true,
     show_wind_arrows: true,
     hidden_spot_ids: [],
+    pinned_spot_ids: [],
     added_spots: [],
     supabase: { enabled: false, url: "", anon_key: "" }
   };
@@ -269,6 +270,7 @@
     const all = [...state.spots, ...added].filter(s => !q || s.name.toLowerCase().includes(q) || (s.region || "").toLowerCase().includes(q));
     $("adminSpotList").innerHTML = all.map(s => {
       const isVisible = state.supabaseReady ? s.active !== false : !hidden.has(s.id);
+      const pinned = new Set(state.config.pinned_spot_ids || []).has(s.id);
       return `<div class="admin-spot" data-id="${escapeHtml(s.id)}">
         <div class="admin-spot-edit">
           <input data-field="name" value="${escapeHtml(s.name)}" title="Spot name" />
@@ -277,7 +279,10 @@
           <input data-field="lon" type="number" step="0.000001" value="${Number(s.lon).toFixed(6)}" title="Longitude" />
           <button class="ghost-btn" data-save="${escapeHtml(s.id)}">Save</button>
         </div>
-        <label><input type="checkbox" data-visible="${escapeHtml(s.id)}" ${isVisible ? "checked" : ""}> visible</label>
+        <div class="admin-spot-flags">
+          <label><input type="checkbox" data-visible="${escapeHtml(s.id)}" ${isVisible ? "checked" : ""}> visible</label>
+          <label><input type="checkbox" data-pinned="${escapeHtml(s.id)}" ${pinned ? "checked" : ""}> pinned</label>
+        </div>
       </div>`;
     }).join("") || `<p class="notice">No matching spots.</p>`;
     document.querySelectorAll("#adminSpotList [data-visible]").forEach(cb => cb.addEventListener("change", async () => {
@@ -288,6 +293,12 @@
       } else {
         const set = new Set(state.config.hidden_spot_ids || []); if (cb.checked) set.delete(id); else set.add(id); state.config.hidden_spot_ids = [...set];
       }
+      previewConfig();
+    }));
+    document.querySelectorAll("#adminSpotList [data-pinned]").forEach(cb => cb.addEventListener("change", () => {
+      const set = new Set(state.config.pinned_spot_ids || []);
+      if (cb.checked) set.add(cb.dataset.pinned); else set.delete(cb.dataset.pinned);
+      state.config.pinned_spot_ids = [...set];
       previewConfig();
     }));
     document.querySelectorAll("#adminSpotList [data-save]").forEach(btn => btn.addEventListener("click", async () => {

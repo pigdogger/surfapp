@@ -84,3 +84,8 @@ Once configured, admin changes to GPS, spot names, active/hidden state, marker s
 ## Model note
 
 This version includes working JSON-based wave and wind visual layers with a smoother wave raster and coastal-corridor wind particles. The current production-safe gateway uses Open-Meteo model APIs plus existing NDBC/CDIP and NOAA CO-OPS ingestion. The direct NOAA HRRR/RAP/GFS/GFS-Wave GRIB2 implementation is still the next deeper model upgrade; the app and pipeline are structured so only derived JSON goes to the frontend.
+
+
+## V2.2 pinned spots
+
+This update adds a pinned surf spot tray above the normal spot list. Users can pin/unpin spots from the public list using the star button; admins can set site-wide pinned spots from the admin spot list with the `pinned` checkbox and save settings to Supabase. Pinned cards show only the spot name plus the current height, so they stay narrow and they are rendered as normal layout content so they do not cover search results or other spots.
