@@ -32,7 +32,7 @@
   "show_wind_arrows": true,
   "hidden_spot_ids": [],
   "added_spots": [],
-  "mobile_detail_scale": 0.54,
+  "mobile_detail_scale": 0.5,
   "wind_layer_enabled": true,
   "wind_layer_opacity": 0.62,
   "wind_particle_density": 1.05,
@@ -44,5 +44,27 @@
     "anon_key": ""
   },
   "auto_center_nearest_beaches": true,
-  "pinned_spot_ids": []
+  "pinned_spot_ids": [],
+  "gradients": {
+    "wind_speed": {
+      "min": 0,
+      "max": 24,
+      "low": "#8ee8ff",
+      "mid": "#f4c542",
+      "high": "#ef4444"
+    },
+    "spot_rating": {
+      "poor": "#e05b52",
+      "fair": "#f4c542",
+      "good": "#1ecb78",
+      "flat": "#8da2af"
+    },
+    "wave_height": {
+      "min": 0,
+      "max": 18,
+      "low": "#1eb6d0",
+      "mid": "#22c55e",
+      "high": "#f97316"
+    }
+  }
 }

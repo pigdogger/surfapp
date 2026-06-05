@@ -1,8 +1,21 @@
 # CaliSurf Light
 
-**west coast model V2.3**
+**west coast model V2.4**
 
 Static Netlify surf app + GitHub Actions forecast pipeline + Supabase-ready admin backend.
+
+
+## V2.4 gradient + sticky mobile map update
+
+- Makes the mobile header/logo/title and banner map sticky while the spot list and forecast panels scroll below.
+- Restores the spot-list panel to a scrollable window showing about five to six spots.
+- Removes wave/wind pause buttons; layers are controlled by simple on/off checkboxes.
+- Adds configurable wind-speed, spot-quality, and wave-height gradients in the admin aesthetic controls.
+- Colors wind particles and forecast wind estimates from light blue to red by wind speed/quality.
+- Adds a map color-scale legend and hides zoom controls when the map is minimized.
+- Improves the wave raster mask by using the surf-spot coastline as the clipping curve, reducing coastline gaps and land spillover.
+- Changes the snapshots card to 48 hours.
+- Makes the main height report a day-range from the 6 AM–7 PM forecast window.
 
 
 ## V2.3 mobile map + wind-pattern + layer-cleanup update

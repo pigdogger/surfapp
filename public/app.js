@@ -1,8 +1,13 @@
-/* CaliSurf Light public app · west coast model V2.3 · calmer wind field · sticky mobile map · no build step. */
+/* CaliSurf Light public app · west coast model V2.4 · wind gradients · sticky header/map · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
     theme: { bg: "#071622", panel: "#0e2434", accent: "#1bb8d4", accent2: "#ff7f50" },
+    gradients: {
+      wind_speed: { min: 0, max: 24, low: "#8ee8ff", mid: "#f4c542", high: "#ef4444" },
+      spot_rating: { poor: "#e05b52", fair: "#f4c542", good: "#1ecb78", flat: "#8da2af" },
+      wave_height: { min: 0, max: 18, low: "#1eb6d0", mid: "#22c55e", high: "#f97316" }
+    },
     marker_size: 7,
     marker_color_mode: "rating",
     typography_scale: 0.88,
@@ -66,6 +71,7 @@
     windParticles: [],
     windAnchorCache: null,
     waveRasterCache: null,
+    coastPointCache: null,
     userLocation: null,
     userPinnedSpotIds: [],
     markers: new Map(),
@@ -250,12 +256,30 @@
     return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
   }
 
+  function gradientConfig(name) {
+    const g = state.config.gradients?.[name] || DEFAULT_CONFIG.gradients?.[name] || {};
+    return { ...g };
+  }
+
+  function gradientStops(name, fallback) {
+    const g = gradientConfig(name);
+    const min = Number.isFinite(Number(g.min)) ? Number(g.min) : fallback[0][0];
+    const max = Number.isFinite(Number(g.max)) ? Number(g.max) : fallback[fallback.length - 1][0];
+    const midVal = Number.isFinite(Number(g.mid_value)) ? Number(g.mid_value) : (min + max) / 2;
+    return [[min, g.low || fallback[0][1]], [midVal, g.mid || fallback[Math.floor(fallback.length / 2)][1]], [max, g.high || fallback[fallback.length - 1][1]]];
+  }
+
   function waveColor(ft) {
-    return colorForValue(Number(ft || 0), [[0, "#294c8f"], [2, "#1eb6d0"], [4, "#22c55e"], [6, "#fde047"], [9, "#f97316"], [13, "#ef4444"], [18, "#d946ef"]]);
+    return colorForValue(Number(ft || 0), gradientStops("wave_height", [[0, "#1eb6d0"], [6, "#22c55e"], [18, "#f97316"]]));
+  }
+
+  function windSpeedColor(speed) {
+    return colorForValue(Number(speed || 0), gradientStops("wind_speed", [[0, "#8ee8ff"], [12, "#f4c542"], [24, "#ef4444"]]));
   }
 
   function scoreColor(score) {
-    return colorForValue(Number(score || 0), [[0, "#c43b4d"], [0.42, "#f08b39"], [0.62, "#f4c542"], [0.78, "#74d66c"], [1, "#1ecb78"]]);
+    const sr = gradientConfig("spot_rating");
+    return colorForValue(Number(score || 0), [[0, sr.poor || "#c43b4d"], [0.50, sr.fair || "#f4c542"], [1, sr.good || "#1ecb78"]]);
   }
 
   function markerColorFor(spotId) {
@@ -269,10 +293,11 @@
       return scoreColor(windowScore(fc.hourly || [], mode));
     }
     const rating = String(fc.rating || "unknown").toLowerCase();
-    if (rating.includes("good")) return "#1ecb78";
-    if (rating.includes("fair")) return "#f4c542";
-    if (rating.includes("poor")) return "#e05b52";
-    if (rating.includes("flat")) return "#8da2af";
+    const sr = gradientConfig("spot_rating");
+    if (rating.includes("good")) return sr.good || "#1ecb78";
+    if (rating.includes("fair")) return sr.fair || "#f4c542";
+    if (rating.includes("poor")) return sr.poor || "#e05b52";
+    if (rating.includes("flat")) return sr.flat || "#8da2af";
     return state.config.theme?.accent2 || "#ff7f50";
   }
 
@@ -435,14 +460,14 @@
     if (!rctx) return out;
     const scaleX = out.width / canvas.width;
     const scaleY = out.height / canvas.height;
-    const cell = window.innerWidth < 760 ? 4 : 5;
-    const scaledCellX = Math.ceil(cell * scaleX) + 2;
-    const scaledCellY = Math.ceil(cell * scaleY) + 2;
+    const cell = window.innerWidth < 760 ? 3 : 4;
+    const scaledCellX = Math.ceil(cell * scaleX) + 3;
+    const scaledCellY = Math.ceil(cell * scaleY) + 3;
 
     for (let y = 0; y < canvas.height; y += cell) {
       for (let x = 0; x < canvas.width; x += cell) {
         const ll = map.containerPointToLatLng([x + cell * .5, y + cell * .5]);
-        if (!isPacificWater(ll.lat, ll.lng, 4.0, 0.035)) continue;
+        if (!isPacificWater(ll.lat, ll.lng, 4.2, 0.018)) continue;
         const wave = waveValueAt(frame, ll.lat, ll.lng);
         if (!wave) continue;
         rctx.fillStyle = hexToRgba(waveColor(wave.height_ft), opacity);
@@ -457,18 +482,44 @@
     blur.height = out.height;
     const bctx = blur.getContext("2d");
     if (bctx) {
-      bctx.filter = window.innerWidth < 760 ? "blur(5px)" : "blur(6px)";
+      bctx.filter = window.innerWidth < 760 ? "blur(3px)" : "blur(4px)";
       bctx.drawImage(out, 0, 0);
+      bctx.filter = "none";
+      bctx.globalCompositeOperation = "destination-in";
+      drawOceanMask(bctx, blur.width, blur.height, map, scaleX, scaleY, 0.010);
+      bctx.globalCompositeOperation = "source-over";
       return blur;
     }
     return out;
   }
 
-  function isPacificWater(lat, lon, offshoreDeg = 4.0, landAllowanceDeg = 0.03) {
+  function drawOceanMask(ctx, width, height, map, scaleX = 1, scaleY = 1, coastOffsetDeg = 0.0) {
+    if (!ctx || !map) return;
+    const bounds = map.getBounds();
+    const south = bounds.getSouth() - 0.5;
+    const north = bounds.getNorth() + 0.5;
+    const samples = 140;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, height);
+    for (let i = 0; i <= samples; i++) {
+      const lat = south + (north - south) * (i / samples);
+      const lon = approxCoastLon(lat) + coastOffsetDeg;
+      const pt = map.latLngToContainerPoint([lat, lon]);
+      ctx.lineTo(pt.x * scaleX, pt.y * scaleY);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "rgba(255,255,255,1)";
+    ctx.fill();
+  }
+
+  function isPacificWater(lat, lon, offshoreDeg = 4.0, landAllowanceDeg = 0.012) {
     lat = Number(lat); lon = Number(lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < 30.2 || lat > 42.8) return false;
     const coast = approxCoastLon(lat);
-    return lon <= coast - landAllowanceDeg && lon >= coast - offshoreDeg;
+    // Paint very slightly under the coastline, then mask to the same coast curve after blur.
+    // This avoids a gap between color and shoreline while keeping the visible layer ocean-side.
+    return lon <= coast + landAllowanceDeg && lon >= coast - offshoreDeg;
   }
 
   function waveValueAt(frame, lat, lon) {
@@ -586,6 +637,8 @@
     if (!state.map || !state.waveLayer) return;
     if (on) {
       if (!state.map.hasLayer(state.waveLayer)) state.waveLayer.addTo(state.map);
+      state.wavePlaying = true;
+      startWaveAnimation();
       state.waveLayer.redraw?.();
     } else if (state.map.hasLayer(state.waveLayer)) state.map.removeLayer(state.waveLayer);
   }
@@ -649,19 +702,37 @@
     });
   }
 
-  function approxCoastLon(lat) {
-    // Lightweight California coastline approximation for display masking only.
-    const curve = [
-      [32.5, -117.2], [33.2, -117.6], [34.0, -118.4], [34.6, -120.0],
-      [35.4, -121.1], [36.4, -121.9], [37.6, -122.6], [38.6, -123.1],
-      [40.0, -124.1], [41.6, -124.2], [42.2, -124.2]
+  function coastlineControlPoints() {
+    const key = `${state.spots.length}|${(state.config.hidden_spot_ids || []).length}|${(state.config.added_spots || []).length}`;
+    if (state.coastPointCache?.key === key) return state.coastPointCache.points;
+    const spots = activeSpots();
+    const fallback = [
+      [32.50, -117.20], [33.20, -117.60], [34.00, -118.40], [34.60, -120.00],
+      [35.40, -121.10], [36.40, -121.90], [37.60, -122.60], [38.60, -123.10],
+      [40.00, -124.10], [41.60, -124.20], [42.20, -124.20]
     ];
+    const pts = spots
+      .map(s => [Number(s.lat), Number(s.lon)])
+      .filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]) && p[0] >= 30.2 && p[0] <= 42.8)
+      .sort((a, b) => a[0] - b[0]);
+    const controls = pts.length > 20 ? pts : fallback;
+    state.coastPointCache = { key, points: controls };
+    return controls;
+  }
+
+  function approxCoastLon(lat) {
+    const curve = coastlineControlPoints();
+    lat = Number(lat);
+    if (!Number.isFinite(lat)) return -120;
     if (lat <= curve[0][0]) return curve[0][1];
     for (let i = 1; i < curve.length; i++) {
       const a = curve[i - 1], b = curve[i];
       if (lat <= b[0]) {
-        const t = (lat - a[0]) / (b[0] - a[0]);
-        return a[1] + (b[1] - a[1]) * t;
+        const t = (lat - a[0]) / (b[0] - a[0] || 1);
+        // Lightly smooth toward the hand-drawn coastline so one odd surf-spot coordinate
+        // cannot create a sudden hard notch in the visual ocean mask.
+        const raw = a[1] + (b[1] - a[1]) * t;
+        return raw;
       }
     }
     return curve[curve.length - 1][1];
@@ -786,7 +857,7 @@
       const step = Math.max(0.20, Math.min(1.65, speed * 0.045 * (window.innerWidth < 760 ? .82 : .95)));
       const nx = p.x + Math.cos(rad) * step;
       const ny = p.y + Math.sin(rad) * step;
-      ctx.strokeStyle = speed <= 6 ? "rgba(155,255,235,.72)" : speed <= 13 ? "rgba(232,208,255,.68)" : "rgba(255,174,210,.70)";
+      ctx.strokeStyle = hexToRgba(windSpeedColor(speed), 0.86);
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
@@ -814,8 +885,9 @@
     if (!state.map || !state.windLayer) return;
     if (on) {
       if (!state.map.hasLayer(state.windLayer)) state.windLayer.addTo(state.map);
+      state.windPlaying = true;
       state.windLayer.redraw?.();
-      if (state.windPlaying) startWindAnimation();
+      startWindAnimation();
     } else {
       if (state.map.hasLayer(state.windLayer)) state.map.removeLayer(state.windLayer);
       stopWindAnimation();
@@ -936,10 +1008,11 @@
     catch (_) { return String(iso).slice(5, 10); }
   }
 
-  function arrowSvg(directionDeg, enabled = true) {
+  function arrowSvg(directionDeg, enabled = true, color = null) {
     if (!enabled || directionDeg === null || directionDeg === undefined) return "";
     const rot = Number(directionDeg) || 0;
-    return `<span class="dir-arrow" title="${rot}°"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M12 2 L17 15 L12 12 L7 15 Z" fill="currentColor"></path><circle cx="12" cy="12" r="2" fill="#0b2030"></circle></svg></span>`;
+    const style = color ? ` style="--arrow-color:${color}"` : "";
+    return `<span class="dir-arrow"${style} title="${rot}°"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M12 2 L17 15 L12 12 L7 15 Z" fill="currentColor"></path><circle cx="12" cy="12" r="2" fill="#0b2030"></circle></svg></span>`;
   }
 
   function card(title, main, sub = "", extraClass = "") {
@@ -959,20 +1032,39 @@
       cards.push(card("Primary swell", `<div class="arrow-row">${arrowSvg(ps.direction_deg, state.config.show_swell_arrows !== false)}<span>${ps.height_ft ?? "—"} ft @ ${ps.period_s ?? "—"}s</span></div>`, `${ps.direction_compass || "—"} ${ps.direction_deg ?? "—"}° · ${escapeHtml(ps.station_name || ps.source || "public wave source")}`));
       cards.push(card("Secondary swell", `<div class="arrow-row">${arrowSvg(ss.direction_deg, state.config.show_swell_arrows !== false)}<span>${ss.height_ft ?? "—"} ft @ ${ss.period_s ?? "—"}s</span></div>`, `${ss.direction_compass || "—"} ${ss.direction_deg ?? "—"}° · ${escapeHtml(ss.source || "model component")}`));
     }
-    if (show.wind !== false) cards.push(card("Wind", `<div class="arrow-row">${arrowSvg(wind.direction_deg, state.config.show_wind_arrows !== false)}<span>${wind.direction_compass || "—"} ${wind.speed_kt ?? "—"} kt</span></div>`, `Gust ${wind.gust_kt ?? "—"} kt · ${escapeHtml(wind.quality || "unknown")} · ${escapeHtml(wind.source || "model")}`));
+    if (show.wind !== false) cards.push(card("Wind", `<div class="arrow-row">${arrowSvg(wind.direction_deg, state.config.show_wind_arrows !== false, windSpeedColor(wind.speed_kt))}<span>${wind.direction_compass || "—"} ${wind.speed_kt ?? "—"} kt</span></div>`, `Gust ${wind.gust_kt ?? "—"} kt · ${escapeHtml(wind.quality || "unknown")} · ${escapeHtml(wind.source || "model")}`));
     if (show.tide !== false) cards.push(card("Tide", `${tide.level_ft ?? "—"} ft`, `${escapeHtml(tide.trend || "unknown")} · ${escapeHtml(tide.station_name || "NOAA CO-OPS")}`));
     if (show.sun !== false) cards.push(card("Sun", `${fmtTime(sun.sunrise_utc)} / ${fmtTime(sun.sunset_utc)}`, "sunrise / sunset · Pacific time"));
     if (show.confidence !== false) cards.push(card("Confidence", `${Math.round((fc.confidence || 0) * 100)}%`, `${escapeHtml(fc.best_window || "—")} · ${escapeHtml(fc.rating || "unknown")}`));
     if (show.model !== false) cards.push(card("Why this call", escapeHtml(notes.callout || "—"), `Exposure ${notes.transform?.directional_exposure ?? "—"} · bathy gain ${notes.transform?.bathymetry_gain ?? "—"}`, "full"));
-    if (show.hourly !== false) cards.push(`<article class="info-card full"><div class="kicker">39 hour snapshots</div>${renderThirtyNineHourSnapshots(fc.hourly || [], spot)}</article>`);
-    if (show.five_day !== false) cards.push(`<article class="info-card full"><div class="kicker">5 day forecast</div>${renderFiveDayForecast(fc.hourly || [])}</article>`);
+    if (show.hourly !== false) cards.push(`<article class="info-card full"><div class="kicker">48 hour snapshots</div>${renderThirtyNineHourSnapshots(fc.hourly || [], spot)}</article>`);
+    if (show.five_day !== false) cards.push(`<article class="info-card full"><div class="kicker">5 day forecast</div>${renderFiveDayForecast(fc.hourly || [], spot)}</article>`);
     if (show.warnings !== false && (fc.warnings || []).length) cards.push(`<div class="warning-list"><strong>Data warnings:</strong><br>${(fc.warnings || []).slice(0, 7).map(escapeHtml).join("<br>")}</div>`);
+    const dayRange = dailyRangeFor(fc);
     panel.innerHTML = `
       <div class="forecast-head">
         <div class="forecast-title"><h2>${escapeHtml(spot.name)}</h2><p>${escapeHtml(spot.region || "California")} · updated ${fmtDateTime(fc.last_updated)}</p></div>
-        <div class="big-height"><strong>${escapeHtml(fc.surf_height_ft?.human || "—")}</strong><span class="rating ${ratingClass(fc.rating)}">${escapeHtml(fc.rating || "unknown")}</span></div>
+        <div class="big-height"><small>daily range</small><strong>${escapeHtml(dayRange || fc.surf_height_ft?.human || "—")}</strong><span class="rating ${ratingClass(fc.rating)}">${escapeHtml(fc.rating || "unknown")}</span></div>
       </div>
       <div class="card-grid">${cards.join("")}</div>`;
+  }
+
+  function cleanFt(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return Number.isInteger(n) ? String(n) : String(Math.round(n * 2) / 2).replace(/\.0$/, "");
+  }
+
+  function dailyRangeFor(fc) {
+    const rows = fc?.hourly || [];
+    if (!rows.length) return fc?.surf_height_ft?.human || "";
+    const key = dayKey(fc.last_updated || rows[0]?.time);
+    const dayRows = rows.filter(r => dayKey(r.time) === key && localHour(r.time) >= 6 && localHour(r.time) <= 19);
+    const usable = dayRows.length ? dayRows : rows.slice(0, 8);
+    const lows = usable.map(r => Number(r.surf_min_ft)).filter(Number.isFinite);
+    const highs = usable.map(r => Number(r.surf_max_ft)).filter(Number.isFinite);
+    if (!lows.length || !highs.length) return fc?.surf_height_ft?.human || "";
+    return `${cleanFt(Math.min(...lows))}-${cleanFt(Math.max(...highs))} ft`;
   }
 
   function nearestHourly(rows, targetDate) {
@@ -992,7 +1084,7 @@
     if (!rows.length) return `<div class="metric-sub">No snapshot values in this forecast.</div>`;
     const base = pacificMidnightFromIso(rows[0].time);
     const slots = [];
-    for (let h = 0; h <= 39; h += 3) {
+    for (let h = 0; h <= 48; h += 3) {
       const target = new Date(base.getTime() + h * 3600_000);
       const row = nearestHourly(rows, target);
       if (row) slots.push(row);
@@ -1022,7 +1114,7 @@
     return Math.abs((a - b + 180) % 360 - 180);
   }
 
-  function renderFiveDayForecast(rows) {
+  function renderFiveDayForecast(rows, spot) {
     if (!rows.length) return `<div class="metric-sub">No 5-day values in this forecast.</div>`;
     const groups = [];
     const byDay = new Map();
@@ -1041,8 +1133,29 @@
     }
     return `<div class="five-day-grid">${groups.map(g => `<div class="day-column"><h3>${shortDay(g.rows[0]?.time || g.key)}</h3>${g.rows.map(r => {
       const high = Number(r.surf_max_ft || 0);
-      return `<div class="day-hour" style="--hour-color:${waveColor(high)}"><span>${fmtTime(r.time).replace(":00", "")}</span><strong>${r.surf_min_ft}-${r.surf_max_ft}</strong><em>${r.wind_speed_kt ?? "—"} kt</em></div>`;
+      const wc = windConditionColor(r, spot);
+      return `<div class="day-hour" style="--hour-color:${waveColor(high)};--wind-color:${wc}"><span>${fmtTime(r.time).replace(":00", "")}</span><strong>${r.surf_min_ft}-${r.surf_max_ft}</strong><em>${r.wind_speed_kt ?? "—"} kt</em></div>`;
     }).join("")}</div>`).join("")}</div>`;
+  }
+
+  function renderGradientLegend() {
+    const el = $("mapGradientLegend");
+    if (!el) return;
+    const mode = state.config.marker_color_mode || "rating";
+    let label = "Spot quality";
+    let low = gradientConfig("spot_rating").poor || "#e05b52";
+    let mid = gradientConfig("spot_rating").fair || "#f4c542";
+    let high = gradientConfig("spot_rating").good || "#1ecb78";
+    let minText = "poor", maxText = "good";
+    if (mode === "wave_size") {
+      const g = gradientConfig("wave_height");
+      low = g.low || "#1eb6d0"; mid = g.mid || "#22c55e"; high = g.high || "#f97316";
+      label = "Wave size"; minText = `${g.min ?? 0}ft`; maxText = `${g.max ?? 18}ft`;
+    } else if (["morning", "afternoon", "evening"].includes(mode)) {
+      label = mode.replace(/^./, c => c.toUpperCase()) + " window";
+      minText = "worse"; maxText = "best";
+    }
+    el.innerHTML = `<span>${label}</span><i style="background:linear-gradient(180deg,${high},${mid},${low})"></i><b>${maxText}</b><b>${minText}</b>`;
   }
 
   function syncRegionChips() {
@@ -1076,20 +1189,11 @@
     $("spotSearch").addEventListener("input", e => preservePagePosition(() => { state.search = e.target.value; renderSpotList(); drawMarkers({ fit: true }); }));
     $("waveLayerToggle")?.addEventListener("change", e => setWaveLayerVisible(e.target.checked));
     $("windLayerToggle")?.addEventListener("change", e => setWindLayerVisible(e.target.checked));
-    $("windPlayPause")?.addEventListener("click", () => {
-      state.windPlaying = !state.windPlaying;
-      $("windPlayPause").textContent = state.windPlaying ? "Pause wind" : "Play wind";
-      if (state.windPlaying) startWindAnimation(); else stopWindAnimation();
-    });
-    $("wavePlayPause")?.addEventListener("click", () => {
-      state.wavePlaying = !state.wavePlaying;
-      $("wavePlayPause").textContent = state.wavePlaying ? "Pause" : "Play";
-      if (state.wavePlaying) startWaveAnimation(); else stopWaveAnimation();
-    });
     $("markerColorMode")?.addEventListener("change", e => {
       state.config.marker_color_mode = e.target.value;
       refreshMarkerIcons();
       renderSpotList();
+      renderGradientLegend();
     });
     $("nearMeButton")?.addEventListener("click", e => {
       e.preventDefault();
@@ -1280,6 +1384,7 @@
       initMap();
       updateWaveFrameLabel();
       updateWindFrameLabel();
+      renderGradientLegend();
       renderSpotList();
       const first = filteredSpots().find(s => forecastFor(s.id)) || filteredSpots()[0] || activeSpots()[0];
       if (first) selectSpot(first.id, false, false);

@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-direct · v2.3 mobile map/wind controls. */
+/* CaliSurf Light admin console · Supabase-direct · v2.4 gradient controls. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -6,6 +6,11 @@
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
     theme: { bg: "#071622", panel: "#0e2434", accent: "#1bb8d4", accent2: "#ff7f50" },
+    gradients: {
+      wind_speed: { min: 0, max: 24, low: "#8ee8ff", mid: "#f4c542", high: "#ef4444" },
+      spot_rating: { poor: "#e05b52", fair: "#f4c542", good: "#1ecb78", flat: "#8da2af" },
+      wave_height: { min: 0, max: 18, low: "#1eb6d0", mid: "#22c55e", high: "#f97316" }
+    },
     marker_size: 7,
     marker_color_mode: "rating",
     typography_scale: 0.86,
@@ -148,6 +153,15 @@
     $("accent2Color").value = c.theme.accent2;
     $("markerSize").value = c.marker_size;
     $("markerColorMode").value = c.marker_color_mode || "rating";
+    if ($("spotPoorColor")) $("spotPoorColor").value = c.gradients?.spot_rating?.poor || "#e05b52";
+    if ($("spotFairColor")) $("spotFairColor").value = c.gradients?.spot_rating?.fair || "#f4c542";
+    if ($("spotGoodColor")) $("spotGoodColor").value = c.gradients?.spot_rating?.good || "#1ecb78";
+    if ($("windLowColor")) $("windLowColor").value = c.gradients?.wind_speed?.low || "#8ee8ff";
+    if ($("windHighColor")) $("windHighColor").value = c.gradients?.wind_speed?.high || "#ef4444";
+    if ($("windMinSpeed")) $("windMinSpeed").value = c.gradients?.wind_speed?.min ?? 0;
+    if ($("windMaxSpeed")) $("windMaxSpeed").value = c.gradients?.wind_speed?.max ?? 24;
+    if ($("waveLowColor")) $("waveLowColor").value = c.gradients?.wave_height?.low || "#1eb6d0";
+    if ($("waveHighColor")) $("waveHighColor").value = c.gradients?.wave_height?.high || "#f97316";
     $("fontScale").value = c.typography_scale;
     $("cornerRadius").value = c.corner_radius ?? 8;
     $("edgeBuffer").value = c.edge_buffer ?? 22;
@@ -178,6 +192,11 @@
   function readConfigFromForm() {
     state.config = mergeDeep(state.config, {
       theme: { bg: $("bgColor").value, panel: $("panelColor").value, accent: $("accentColor").value, accent2: $("accent2Color").value },
+      gradients: {
+        spot_rating: { poor: $("spotPoorColor")?.value || "#e05b52", fair: $("spotFairColor")?.value || "#f4c542", good: $("spotGoodColor")?.value || "#1ecb78", flat: state.config.gradients?.spot_rating?.flat || "#8da2af" },
+        wind_speed: { min: Number($("windMinSpeed")?.value ?? 0), max: Number($("windMaxSpeed")?.value ?? 24), low: $("windLowColor")?.value || "#8ee8ff", mid: state.config.gradients?.wind_speed?.mid || "#f4c542", high: $("windHighColor")?.value || "#ef4444" },
+        wave_height: { min: state.config.gradients?.wave_height?.min ?? 0, max: state.config.gradients?.wave_height?.max ?? 18, low: $("waveLowColor")?.value || "#1eb6d0", mid: state.config.gradients?.wave_height?.mid || "#22c55e", high: $("waveHighColor")?.value || "#f97316" }
+      },
       marker_size: Number($("markerSize").value),
       marker_color_mode: $("markerColorMode").value,
       typography_scale: Number($("fontScale").value),
