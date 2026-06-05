@@ -1,4 +1,4 @@
-/* CaliSurf Light public app · west coast model V2.2 · pinned spots · no build step. */
+/* CaliSurf Light public app · west coast model V2.3 · calmer wind field · sticky mobile map · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
@@ -11,13 +11,13 @@
     mobile_detail_scale: 0.64,
     layout: "full",
     default_region: "san-diego",
-    wave_layer_enabled: true,
-    wave_layer_opacity: 0.26,
+    wave_layer_enabled: false,
+    wave_layer_opacity: 0.18,
     wave_animation_ms: 1150,
     show_wave_direction_arrows: true,
     wind_layer_enabled: true,
     wind_layer_opacity: 0.86,
-    wind_particle_density: 1.45,
+    wind_particle_density: 1.05,
     auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
@@ -420,8 +420,8 @@
         if (!isPacificWater(ll.lat, ll.lng, 3.9, 0.04)) continue;
         const wave = waveValueAt(frame, ll.lat, ll.lng);
         if (!wave || wave.direction_deg == null) continue;
-        const drift = 4.5 * Math.sin(phase * 2.2 + ll.lat * .8 + ll.lng * .4);
-        drawWaveArrow(ctx, x + drift, y + drift * .35, wave.direction_deg, Math.max(15, Math.min(26, 10 + Number(wave.height_ft || 0) * 2.5)));
+        // Arrows stay pinned to their grid root; only direction/size change with the frame.
+        drawWaveArrow(ctx, x, y, wave.direction_deg, Math.max(15, Math.min(26, 10 + Number(wave.height_ft || 0) * 2.5)));
       }
     }
     ctx.restore();
@@ -435,9 +435,9 @@
     if (!rctx) return out;
     const scaleX = out.width / canvas.width;
     const scaleY = out.height / canvas.height;
-    const cell = window.innerWidth < 760 ? 8 : 7;
-    const scaledCellX = Math.ceil(cell * scaleX) + 1;
-    const scaledCellY = Math.ceil(cell * scaleY) + 1;
+    const cell = window.innerWidth < 760 ? 4 : 5;
+    const scaledCellX = Math.ceil(cell * scaleX) + 2;
+    const scaledCellY = Math.ceil(cell * scaleY) + 2;
 
     for (let y = 0; y < canvas.height; y += cell) {
       for (let x = 0; x < canvas.width; x += cell) {
@@ -457,7 +457,7 @@
     blur.height = out.height;
     const bctx = blur.getContext("2d");
     if (bctx) {
-      bctx.filter = window.innerWidth < 760 ? "blur(3px)" : "blur(4px)";
+      bctx.filter = window.innerWidth < 760 ? "blur(5px)" : "blur(6px)";
       bctx.drawImage(out, 0, 0);
       return blur;
     }
@@ -633,7 +633,7 @@
     const canvas = state.windLayer._canvas;
     const mobile = window.innerWidth < 760;
     const density = Number(state.config.wind_particle_density || 1);
-    const count = Math.max(90, Math.min(mobile ? 420 : 900, Math.round((canvas.width * canvas.height) / (mobile ? 1650 : 1300) * density)));
+    const count = Math.max(120, Math.min(mobile ? 650 : 1350, Math.round((canvas.width * canvas.height) / (mobile ? 1180 : 980) * density)));
     state.windParticles = Array.from({ length: count }, () => newWindParticle(canvas));
   }
 
@@ -674,9 +674,9 @@
 
   function isNearWindCorridor(lat, lon) {
     const coast = approxCoastLon(Number(lat));
-    // Keep visual wind hyperlocal to the surf corridor: beaches + nearshore water,
-    // not inland deserts or the whole continent.
-    return lon >= coast - 1.55 && lon <= coast + 0.10 && lat >= 30.35 && lat <= 42.7;
+    // V2.3: show the larger coastal weather pattern like Windy/MyRadar: far offshore
+    // and well inland, but still bounded around California instead of the whole continent.
+    return lon >= coast - 5.4 && lon <= coast + 2.45 && lat >= 30.25 && lat <= 42.8;
   }
 
   function windAnchors() {
@@ -688,7 +688,7 @@
     // Model grid anchors, restricted to the coastal strip.
     for (const p of (frame?.points || [])) {
       if (isNearWindCorridor(Number(p.lat), Number(p.lon))) {
-        pts.push({ lat: Number(p.lat), lon: Number(p.lon), speed_kt: Number(p.speed_kt || 0), direction_deg: Number(p.direction_deg), source: "grid", weight: 0.55 });
+        pts.push({ lat: Number(p.lat), lon: Number(p.lon), speed_kt: Number(p.speed_kt || 0), direction_deg: Number(p.direction_deg), source: "grid", weight: 0.80 });
       }
     }
 
@@ -700,7 +700,7 @@
       const speed = Number(w.speed_kt);
       const dir = Number(w.direction_deg);
       if (Number.isFinite(speed) && Number.isFinite(dir)) {
-        pts.push({ lat: Number(spot.lat), lon: Number(spot.lon), speed_kt: speed, direction_deg: dir, source: "spot", weight: 1.75 });
+        pts.push({ lat: Number(spot.lat), lon: Number(spot.lon), speed_kt: speed, direction_deg: dir, source: "spot", weight: 1.25 });
       }
     }
     const clean = pts.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Number.isFinite(p.speed_kt) && Number.isFinite(p.direction_deg));
@@ -719,8 +719,8 @@
       const dLat = Number(p.lat) - lat;
       const dLon = (Number(p.lon) - lon) * Math.cos(lat * Math.PI / 180);
       const d2 = dLat * dLat + dLon * dLon;
-      // Tight radius gives localized beaches instead of one broad continental field.
-      if (d2 > (p.source === "spot" ? 0.92 : 1.15)) continue;
+      // Broader radius shows weather-pattern continuity while spot anchors still add local bias near beaches.
+      if (d2 > (p.source === "spot" ? 1.20 : 2.80)) continue;
       nearest.push({ p, d: d2 });
     }
     nearest.sort((a, b) => a.d - b.d);
@@ -749,8 +749,8 @@
     const anchors = visibleWindAnchors(canvas, state.map);
     if (anchors.length && state.map) {
       const a = anchors[Math.floor(Math.random() * anchors.length)];
-      const jitterLat = (Math.random() - .5) * .20;
-      const jitterLon = (Math.random() - .5) * .32;
+      const jitterLat = (Math.random() - .5) * .46;
+      const jitterLon = (Math.random() - .5) * .86;
       const pt = state.map.latLngToContainerPoint([Number(a.lat) + jitterLat, Number(a.lon) + jitterLon]);
       return { x: pt.x, y: pt.y, age: Math.random() * 54, maxAge: 34 + Math.random() * 44 };
     }
@@ -762,15 +762,15 @@
     const frame = currentWindFrame();
     ctx.save();
     ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "rgba(0,0,0,.16)";
+    ctx.fillStyle = "rgba(0,0,0,.10)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
     resetWindParticles();
-    const opacity = Math.max(.20, Math.min(.98, Number(state.config.wind_layer_opacity ?? .86)));
+    const opacity = Math.max(.12, Math.min(.90, Number(state.config.wind_layer_opacity ?? .62)));
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.lineWidth = window.innerWidth < 760 ? 2.15 : 1.85;
+    ctx.lineWidth = window.innerWidth < 760 ? 0.95 : 0.85;
     ctx.lineCap = "round";
     ctx.shadowColor = "rgba(0,0,0,.82)";
     ctx.shadowBlur = 4;
@@ -783,10 +783,10 @@
       const speed = Math.max(1, Number(wind.speed_kt || 4));
       const motionDeg = (Number(wind.direction_deg) + 180) % 360;
       const rad = (motionDeg - 90) * Math.PI / 180;
-      const step = Math.max(0.75, Math.min(5.8, speed * 0.15 * (window.innerWidth < 760 ? .86 : 1)));
+      const step = Math.max(0.20, Math.min(1.65, speed * 0.045 * (window.innerWidth < 760 ? .82 : .95)));
       const nx = p.x + Math.cos(rad) * step;
       const ny = p.y + Math.sin(rad) * step;
-      ctx.strokeStyle = speed <= 6 ? "rgba(132,255,226,.96)" : speed <= 13 ? "rgba(255,229,118,.94)" : "rgba(255,144,103,.92)";
+      ctx.strokeStyle = speed <= 6 ? "rgba(155,255,235,.72)" : speed <= 13 ? "rgba(232,208,255,.68)" : "rgba(255,174,210,.70)";
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
@@ -1095,6 +1095,15 @@
       e.preventDefault();
       centerOnUserLocation(true);
     });
+    $("mapMinimizeButton")?.addEventListener("click", e => {
+      e.preventDefault();
+      const card = document.querySelector(".map-card");
+      const collapsed = !card?.classList.contains("is-map-minimized");
+      card?.classList.toggle("is-map-minimized", collapsed);
+      $("mapMinimizeButton").textContent = collapsed ? "+" : "−";
+      $("mapMinimizeButton").setAttribute("aria-label", collapsed ? "Expand map" : "Minimize map");
+      setTimeout(() => state.map?.invalidateSize?.(), 80);
+    });
   }
 
   function setupInstallPrompt() {
@@ -1260,9 +1269,10 @@
       state.latest = latest;
       state.waveGrid = waveGrid;
       state.windGrid = windGrid;
-      $("globalStatus").textContent = waveGrid && windGrid ? "wave + wind layers ready" : waveGrid ? "wave model ready" : windGrid ? "wind model ready" : "model ready";
+      const statusEl = $("globalStatus");
+      if (statusEl) { statusEl.textContent = ""; statusEl.hidden = true; }
       $("modelRefresh").textContent = `model refresh: ${fmtDateTime(latest.generated_at)}`;
-      $("waveLayerToggle").checked = state.config.wave_layer_enabled !== false;
+      $("waveLayerToggle").checked = state.config.wave_layer_enabled === true;
       if ($("windLayerToggle")) $("windLayerToggle").checked = state.config.wind_layer_enabled !== false;
       $("markerColorMode").value = state.config.marker_color_mode || "rating";
       bindControls();
@@ -1276,7 +1286,7 @@
       maybeAutoCenterOnLocation();
     } catch (err) {
       console.error(err);
-      $("globalStatus").textContent = "Data failed to load";
+      if ($("globalStatus")) $("globalStatus").textContent = "Data failed to load";
       $("forecastPanel").innerHTML = `<div class="empty-state">Could not load data. Check that public/data/spots.json, latest_forecasts.json, wave_grid_24h.json, and wind_grid_latest.json exist.</div>`;
     }
   }

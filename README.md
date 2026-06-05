@@ -1,8 +1,25 @@
 # CaliSurf Light
 
-**west coast model V2.1**
+**west coast model V2.3**
 
 Static Netlify surf app + GitHub Actions forecast pipeline + Supabase-ready admin backend.
+
+
+## V2.3 mobile map + wind-pattern + layer-cleanup update
+
+This update responds to the latest mobile screenshots:
+
+- Moves **Near me** into the same horizontal region-chip row as All CA / counties.
+- Removes the top **wave + wind layers ready** badge.
+- Removes the wave/wind timestamp detail labels from the map controls.
+- Makes the mobile header shorter and the map more banner-shaped.
+- Makes the map card sticky at the top of the mobile screen while the spot list and forecast details scroll normally below it.
+- Adds a semi-transparent gray **− / +** map minimize button over the map.
+- Defaults the wave-height overlay off because the current public grid is not high-fidelity enough to be shown as a primary layer. Users/admins can still turn it on.
+- Keeps wave arrows pinned to their root positions instead of bouncing/drifting.
+- Slows down the wind particles, makes them thinner/smaller, and extends the wind field farther offshore and inland so it shows broader weather-pattern flow like Windy/MyRadar.
+- Uses a broader generated wind grid in `public/data/wind_grid_latest.json` and in the GitHub Action pipeline.
+- Further reduces mobile forecast typography weight and size.
 
 
 ## V2.1 wave/wind/location hotfix

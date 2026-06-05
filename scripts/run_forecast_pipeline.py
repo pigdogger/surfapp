@@ -1125,7 +1125,7 @@ def synthetic_wave_grid(generated_at: dt.datetime, status: str = "wave_grid:fall
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v2.1",
+        "model": "calisurf-wave-grid-v2.3",
         "source": status,
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
@@ -1197,8 +1197,8 @@ def fetch_wave_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v2.1",
-        "source": "Open-Meteo Marine API best-match wave model grid; drawn client-side as semitransparent wave-height colorization",
+        "model": "calisurf-wave-grid-v2.3",
+        "source": "Open-Meteo Marine API best-match wave model grid; drawn client-side as optional semitransparent offshore wave-height colorization",
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
@@ -1223,16 +1223,16 @@ def approx_coast_lon(lat: float) -> float:
 
 
 def california_wind_grid_points() -> List[Dict[str, float]]:
-    """Hyperlocal coastal-corridor wind grid for particles.
+    """Broader California wind grid for weather-pattern particles.
 
-    The broad offshore/inland grid made wind look like one continent-scale
-    pattern. V2.1 samples a tighter nearshore strip; the browser blends these
-    points with spot-level forecast winds to show beach-scale differences.
+    V2.3 intentionally extends far offshore and inland so users can see the
+    weather pattern feeding the local surf wind, while the frontend still blends
+    spot-level forecast winds near actual breaks.
     """
     pts: List[Dict[str, float]] = []
-    for lat in frange(30.5, 42.5, 0.32):
+    for lat in frange(30.5, 42.5, 0.42):
         coast = approx_coast_lon(lat)
-        for lon in frange(coast - 1.65, coast + 0.05, 0.32):
+        for lon in frange(coast - 5.35, coast + 2.45, 0.46):
             pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
     return pts
 
@@ -1254,10 +1254,10 @@ def synthetic_wind_grid(generated_at: dt.datetime, status: str = "wind_grid:fall
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WIND_GRID_HOURS,
-        "model": "calisurf-wind-grid-v2.1",
+        "model": "calisurf-wind-grid-v2.3",
         "source": status,
         "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
-        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -130.2, "lon_max": -114.4},
         "frames": frames,
         "warnings": [status] if "fallback" in status or "offline" in status or "failed" in status else [],
     }
@@ -1316,10 +1316,10 @@ def fetch_wind_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WIND_GRID_HOURS,
-        "model": "calisurf-wind-grid-v2.1",
+        "model": "calisurf-wind-grid-v2.3",
         "source": "Open-Meteo Weather Forecast API best-match 10 m wind grid; set OPEN_METEO_WIND_MODELS to force HRRR/GFS where supported",
         "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
-        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
+        "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -130.2, "lon_max": -114.4},
         "frames": frames,
         "warnings": warnings,
     }
@@ -1338,12 +1338,13 @@ def update_site_config_from_env() -> None:
         cfg = {}
     cfg.setdefault("data_base_url", "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data")
     # Safer mobile/default settings from v1.9.
-    cfg.setdefault("typography_scale", 0.92)
-    cfg.setdefault("mobile_detail_scale", 0.78)
-    cfg.setdefault("edge_buffer", 16)
-    cfg.setdefault("wave_layer_opacity", 0.32)
-    cfg.setdefault("wind_layer_opacity", 0.86)
-    cfg.setdefault("wind_particle_density", 1.45)
+    cfg.setdefault("typography_scale", 0.86)
+    cfg.setdefault("mobile_detail_scale", 0.54)
+    cfg.setdefault("edge_buffer", 14)
+    cfg.setdefault("wave_layer_enabled", False)
+    cfg.setdefault("wave_layer_opacity", 0.18)
+    cfg.setdefault("wind_layer_opacity", 0.62)
+    cfg.setdefault("wind_particle_density", 1.05)
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     supabase_anon = os.environ.get("SUPABASE_ANON_KEY", "")
     if supabase_url and supabase_anon:

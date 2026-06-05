@@ -31,15 +31,15 @@
         </div>
       </div>
       <div class="top-actions">
-        <button class="install-btn location-btn" id="nearMeButton" type="button">Near me</button>
         <button class="install-btn" id="installButton" hidden>Install app</button>
-        <div class="status-pill" id="globalStatus">Loading model…</div>
+        <div class="status-pill" id="globalStatus" hidden aria-hidden="true"></div>
       </div>
     </header>
 
     <main class="layout">
       <section class="map-card" aria-label="California surf map">
         <div class="region-scroller" id="regionScroller" aria-label="Region selector">
+          <button class="chip near-me-chip" id="nearMeButton" type="button">Near me</button>
           <button class="chip" data-region="all">All CA</button>
           <button class="chip is-active" data-region="san-diego">San Diego</button>
           <button class="chip" data-region="orange-county">Orange County</button>
@@ -63,14 +63,13 @@
             </label>
           </div>
           <div class="map-control-row map-layer-row">
-            <label class="mini-toggle"><input id="waveLayerToggle" type="checkbox" checked /> Wave layer</label>
+            <label class="mini-toggle"><input id="waveLayerToggle" type="checkbox" /> Wave height</label>
             <button id="wavePlayPause" class="mini-button" type="button">Pause</button>
-            <span id="waveFrameLabel" class="wave-frame-label">24h wave animation</span>
             <label class="mini-toggle"><input id="windLayerToggle" type="checkbox" checked /> Wind direction</label>
             <button id="windPlayPause" class="mini-button" type="button">Pause wind</button>
-            <span id="windFrameLabel" class="wave-frame-label">wind model</span>
           </div>
         </div>
+        <button id="mapMinimizeButton" class="map-minimize" type="button" aria-label="Minimize map" title="Minimize map">−</button>
         <div id="map" class="map"></div>
       </section>
 

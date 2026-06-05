@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'calisurf-light-pwa-v22-pinned-spots-2026-06-05';
+const CACHE_VERSION = 'calisurf-light-pwa-v23-pinned-spots-2026-06-05';
 const APP_SHELL = [
   './',
   './index.html',

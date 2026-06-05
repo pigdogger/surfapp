@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-direct · v2.2 pinned spots. */
+/* CaliSurf Light admin console · Supabase-direct · v2.3 mobile map/wind controls. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -8,16 +8,16 @@
     theme: { bg: "#071622", panel: "#0e2434", accent: "#1bb8d4", accent2: "#ff7f50" },
     marker_size: 7,
     marker_color_mode: "rating",
-    typography_scale: 0.88,
+    typography_scale: 0.86,
     corner_radius: 8,
-    edge_buffer: 16,
-    mobile_detail_scale: 0.64,
-    wave_layer_enabled: true,
-    wave_layer_opacity: 0.26,
+    edge_buffer: 14,
+    mobile_detail_scale: 0.54,
+    wave_layer_enabled: false,
+    wave_layer_opacity: 0.18,
     show_wave_direction_arrows: true,
     wind_layer_enabled: true,
-    wind_layer_opacity: 0.86,
-    wind_particle_density: 1.45,
+    wind_layer_opacity: 0.62,
+    wind_particle_density: 1.05,
     auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
@@ -151,14 +151,14 @@
     $("fontScale").value = c.typography_scale;
     $("cornerRadius").value = c.corner_radius ?? 8;
     $("edgeBuffer").value = c.edge_buffer ?? 22;
-    $("mobileDetailScale").value = c.mobile_detail_scale ?? 0.64;
+    $("mobileDetailScale").value = c.mobile_detail_scale ?? 0.54;
     if ($("autoCenterNearest")) $("autoCenterNearest").checked = c.auto_center_nearest_beaches !== false;
-    $("waveLayerEnabled").checked = c.wave_layer_enabled !== false;
-    $("waveLayerOpacity").value = c.wave_layer_opacity ?? 0.44;
+    $("waveLayerEnabled").checked = c.wave_layer_enabled === true;
+    $("waveLayerOpacity").value = c.wave_layer_opacity ?? 0.18;
     $("showWaveDirectionArrows").checked = c.show_wave_direction_arrows !== false;
     $("windLayerEnabled").checked = c.wind_layer_enabled !== false;
-    $("windLayerOpacity").value = c.wind_layer_opacity ?? 0.70;
-    $("windParticleDensity").value = c.wind_particle_density ?? 1.0;
+    $("windLayerOpacity").value = c.wind_layer_opacity ?? 0.62;
+    $("windParticleDensity").value = c.wind_particle_density ?? 1.05;
     $("defaultRegion").value = c.default_region || "san-diego";
     $("layoutMode").value = c.layout;
     $("cardSwell").checked = c.show_cards.swell !== false;
