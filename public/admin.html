@@ -54,6 +54,15 @@
               <option value="evening">Evening good</option>
             </select>
           </label>
+          <label>Spot poor color <input id="spotPoorColor" type="color" value="#e05b52" /></label>
+          <label>Spot fair color <input id="spotFairColor" type="color" value="#f4c542" /></label>
+          <label>Spot good color <input id="spotGoodColor" type="color" value="#1ecb78" /></label>
+          <label>Wind low color <input id="windLowColor" type="color" value="#8ee8ff" /></label>
+          <label>Wind high color <input id="windHighColor" type="color" value="#ef4444" /></label>
+          <label>Wind gradient min kt <input id="windMinSpeed" type="number" min="0" max="30" step="1" value="0" /></label>
+          <label>Wind gradient max kt <input id="windMaxSpeed" type="number" min="5" max="60" step="1" value="24" /></label>
+          <label>Wave low color <input id="waveLowColor" type="color" value="#1eb6d0" /></label>
+          <label>Wave high color <input id="waveHighColor" type="color" value="#f97316" /></label>
           <label>Typography scale <input id="fontScale" type="range" min="0.85" max="1.25" step="0.05" value="1" /></label>
           <label>Window corner radius <input id="cornerRadius" type="range" min="2" max="28" value="8" /></label>
           <label>Mobile edge buffer <input id="edgeBuffer" type="range" min="8" max="40" value="22" /></label>
@@ -84,7 +93,7 @@
           <label><input id="cardSun" type="checkbox" checked /> Sunrise/sunset</label>
           <label><input id="cardConfidence" type="checkbox" checked /> Confidence</label>
           <label><input id="cardModel" type="checkbox" checked /> Model notes</label>
-          <label><input id="cardHourly" type="checkbox" checked /> 30 hour snapshots</label>
+          <label><input id="cardHourly" type="checkbox" checked /> 48 hour snapshots</label>
           <label><input id="cardFiveDay" type="checkbox" checked /> 5 day forecast</label>
           <label><input id="cardWarnings" type="checkbox" checked /> Data warnings</label>
           <label><input id="showSwellArrows" type="checkbox" checked /> Swell arrows</label>
