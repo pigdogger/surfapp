@@ -39,9 +39,9 @@
   "auto_scroll_selected_list": false,
   "auto_scroll_region_chips": false,
   "supabase": {
-    "enabled": false,
-    "url": "",
-    "anon_key": ""
+    "enabled": true,
+    "url": "https://hzyskrurgtwceperzcqb.supabase.co",
+    "anon_key": "sb_publishable_mBqm_4Or0NLo0pkk9toq0Q_-0nHMQpX"
   },
   "auto_center_nearest_beaches": true,
   "pinned_spot_ids": [],
