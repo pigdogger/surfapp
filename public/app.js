@@ -1,4 +1,4 @@
-/* CaliSurf Light public app · west coast model V2.0 · no build step. */
+/* CaliSurf Light public app · west coast model V2.1 · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
@@ -8,7 +8,7 @@
     typography_scale: 0.88,
     corner_radius: 8,
     edge_buffer: 16,
-    mobile_detail_scale: 0.70,
+    mobile_detail_scale: 0.64,
     layout: "full",
     default_region: "san-diego",
     wave_layer_enabled: true,
@@ -18,6 +18,7 @@
     wind_layer_enabled: true,
     wind_layer_opacity: 0.86,
     wind_particle_density: 1.45,
+    auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
     supabase: { enabled: false, url: "", anon_key: "" },
@@ -62,6 +63,9 @@
     waveLayer: null,
     windLayer: null,
     windParticles: [],
+    windAnchorCache: null,
+    waveRasterCache: null,
+    userLocation: null,
     markers: new Map(),
     supabaseClient: null,
     deferredInstall: null,
@@ -336,54 +340,123 @@
 
   function drawWaveLayerCanvas(ctx, canvas, map) {
     if (!ctx || !canvas || !map) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     const frame = currentWaveFrame();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
     const opacity = Math.max(0, Math.min(0.78, Number(state.config.wave_layer_opacity ?? 0.26)));
     const phase = (performance.now() / 1000) % 1000;
 
-    // Draw a soft gridded/raster field instead of radial "orb" blobs.
-    // Each model point paints a small lat/lon cell; canvas blur blends the cells
-    // into a continuous Windy/Ventusky-like color layer.
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.globalCompositeOperation = "source-over";
-    ctx.filter = window.innerWidth < 760 ? "blur(6px)" : "blur(9px)";
-    const spacing = estimateGridSpacing(frame.points);
-    for (const p of frame.points) {
-      const lat = Number(p.lat), lon = Number(p.lon);
-      const dx = spacing.lon * 0.58;
-      const dy = spacing.lat * 0.58;
-      const corners = [
-        map.latLngToContainerPoint([lat - dy, lon - dx]),
-        map.latLngToContainerPoint([lat - dy, lon + dx]),
-        map.latLngToContainerPoint([lat + dy, lon + dx]),
-        map.latLngToContainerPoint([lat + dy, lon - dx])
-      ];
-      if (corners.every(pt => pt.x < -40 || pt.x > canvas.width + 40 || pt.y < -40 || pt.y > canvas.height + 40)) continue;
-      ctx.fillStyle = waveColor(p.height_ft);
-      ctx.beginPath();
-      corners.forEach((pt, i) => { if (i) ctx.lineTo(pt.x, pt.y); else ctx.moveTo(pt.x, pt.y); });
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
+    // V2.1: render the wave layer as a continuous sampled raster, not point blobs.
+    // The layer is masked to the Pacific side of the coastline approximation so it
+    // does not paint across land.
+    const key = [
+      state.waveFrameIndex,
+      canvas.width,
+      canvas.height,
+      Math.round(map.getZoom() * 100),
+      Math.round(map.getCenter().lat * 100),
+      Math.round(map.getCenter().lng * 100),
+      Math.round(opacity * 100)
+    ].join("|");
 
-    // Subtle directional streaks that animate within the fixed hourly frame.
+    if (!state.waveRasterCache || state.waveRasterCache.key !== key) {
+      state.waveRasterCache = { key, canvas: buildWaveRaster(frame, canvas, map, opacity) };
+    }
+    if (state.waveRasterCache?.canvas) {
+      ctx.drawImage(state.waveRasterCache.canvas, 0, 0, canvas.width, canvas.height);
+    }
+
     if (state.config.show_wave_direction_arrows === false) return;
     ctx.save();
-    ctx.globalAlpha = Math.min(0.72, opacity + 0.16);
-    ctx.strokeStyle = "rgba(255,255,255,.72)";
-    ctx.fillStyle = "rgba(255,255,255,.72)";
-    ctx.lineWidth = window.innerWidth < 760 ? 1.0 : 1.15;
-    frame.points.forEach((p, i) => {
-      if (i % (window.innerWidth < 760 ? 3 : 2) !== 0 || p.direction_deg == null) return;
-      const pt = map.latLngToContainerPoint([p.lat, p.lon]);
-      if (pt.x < 0 || pt.y < 0 || pt.x > canvas.width || pt.y > canvas.height) return;
-      const drift = 5 * Math.sin(phase * 1.8 + Number(p.lat) * .7 + Number(p.lon) * .3);
-      drawWaveArrow(ctx, pt.x + drift, pt.y + drift * .35, p.direction_deg, Math.max(9, Math.min(18, 5 + Number(p.height_ft || 0) * 2)));
-    });
+    ctx.globalAlpha = 0.92;
+    ctx.lineWidth = window.innerWidth < 760 ? 2.2 : 2.5;
+    ctx.shadowColor = "rgba(0,0,0,.80)";
+    ctx.shadowBlur = 3.5;
+    ctx.lineCap = "round";
+    const step = window.innerWidth < 760 ? 78 : 84;
+    for (let y = step * 0.55; y < canvas.height; y += step) {
+      for (let x = step * 0.55; x < canvas.width; x += step) {
+        const ll = map.containerPointToLatLng([x, y]);
+        if (!isPacificWater(ll.lat, ll.lng, 3.9, 0.04)) continue;
+        const wave = waveValueAt(frame, ll.lat, ll.lng);
+        if (!wave || wave.direction_deg == null) continue;
+        const drift = 4.5 * Math.sin(phase * 2.2 + ll.lat * .8 + ll.lng * .4);
+        drawWaveArrow(ctx, x + drift, y + drift * .35, wave.direction_deg, Math.max(15, Math.min(26, 10 + Number(wave.height_ft || 0) * 2.5)));
+      }
+    }
     ctx.restore();
+  }
+
+  function buildWaveRaster(frame, canvas, map, opacity) {
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.floor(canvas.width / 2));
+    out.height = Math.max(1, Math.floor(canvas.height / 2));
+    const rctx = out.getContext("2d");
+    if (!rctx) return out;
+    const scaleX = out.width / canvas.width;
+    const scaleY = out.height / canvas.height;
+    const cell = window.innerWidth < 760 ? 8 : 7;
+    const scaledCellX = Math.ceil(cell * scaleX) + 1;
+    const scaledCellY = Math.ceil(cell * scaleY) + 1;
+
+    for (let y = 0; y < canvas.height; y += cell) {
+      for (let x = 0; x < canvas.width; x += cell) {
+        const ll = map.containerPointToLatLng([x + cell * .5, y + cell * .5]);
+        if (!isPacificWater(ll.lat, ll.lng, 4.0, 0.035)) continue;
+        const wave = waveValueAt(frame, ll.lat, ll.lng);
+        if (!wave) continue;
+        rctx.fillStyle = hexToRgba(waveColor(wave.height_ft), opacity);
+        rctx.fillRect(Math.floor(x * scaleX), Math.floor(y * scaleY), scaledCellX, scaledCellY);
+      }
+    }
+
+    // Light blur removes pixel seams while preserving coastline masking better than
+    // the previous point/circle painter.
+    const blur = document.createElement("canvas");
+    blur.width = out.width;
+    blur.height = out.height;
+    const bctx = blur.getContext("2d");
+    if (bctx) {
+      bctx.filter = window.innerWidth < 760 ? "blur(3px)" : "blur(4px)";
+      bctx.drawImage(out, 0, 0);
+      return blur;
+    }
+    return out;
+  }
+
+  function isPacificWater(lat, lon, offshoreDeg = 4.0, landAllowanceDeg = 0.03) {
+    lat = Number(lat); lon = Number(lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < 30.2 || lat > 42.8) return false;
+    const coast = approxCoastLon(lat);
+    return lon <= coast - landAllowanceDeg && lon >= coast - offshoreDeg;
+  }
+
+  function waveValueAt(frame, lat, lon) {
+    const pts = frame?._preparedPoints || (frame._preparedPoints = (frame.points || []).map(p => ({
+      lat: Number(p.lat), lon: Number(p.lon), height_ft: Number(p.height_ft || 0), direction_deg: p.direction_deg == null ? null : Number(p.direction_deg)
+    })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Number.isFinite(p.height_ft)));
+    if (!pts?.length) return null;
+    let h = 0, u = 0, v = 0, wsum = 0;
+    let nearestD = Infinity;
+    for (const p of pts) {
+      const dLat = (p.lat - lat);
+      const dLon = (p.lon - lon) * Math.cos((lat || p.lat) * Math.PI / 180);
+      const d2 = dLat * dLat + dLon * dLon;
+      if (d2 < nearestD) nearestD = d2;
+      // Small radius keeps land-side interpolation from jumping across headlands.
+      if (d2 > 1.35) continue;
+      const w = 1 / Math.max(0.012, d2);
+      h += p.height_ft * w;
+      if (p.direction_deg != null) {
+        const r = p.direction_deg * Math.PI / 180;
+        u += Math.cos(r) * w;
+        v += Math.sin(r) * w;
+      }
+      wsum += w;
+    }
+    if (!wsum || nearestD > 1.35) return null;
+    const dir = Math.atan2(v, u) * 180 / Math.PI;
+    return { height_ft: h / wsum, direction_deg: Number.isFinite(dir) ? (dir + 360) % 360 : null };
   }
 
   function estimateGridSpacing(points) {
@@ -406,17 +479,34 @@
   }
 
   function drawWaveArrow(ctx, x, y, fromDeg, len) {
-    // Open-Meteo wave direction is where waves come from. Draw the motion toward shore/opposite direction.
+    // Wave direction is where waves come from. Draw the motion toward shore/opposite direction.
     const rad = ((Number(fromDeg) + 180) - 90) * Math.PI / 180;
     const x2 = x + Math.cos(rad) * len;
     const y2 = y + Math.sin(rad) * len;
+    const head = Math.max(5.5, len * .28);
+
+    ctx.save();
+    ctx.lineWidth += 2.8;
+    ctx.strokeStyle = "rgba(3,12,18,.86)";
+    ctx.fillStyle = "rgba(3,12,18,.86)";
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
-    const head = 4.5;
     ctx.beginPath();
     ctx.moveTo(x2, y2);
     ctx.lineTo(x2 - Math.cos(rad - 0.55) * head, y2 - Math.sin(rad - 0.55) * head);
     ctx.lineTo(x2 - Math.cos(rad + 0.55) * head, y2 - Math.sin(rad + 0.55) * head);
     ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(236,255,255,.96)";
+    ctx.fillStyle = "rgba(236,255,255,.96)";
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - Math.cos(rad - 0.55) * head, y2 - Math.sin(rad - 0.55) * head);
+    ctx.lineTo(x2 - Math.cos(rad + 0.55) * head, y2 - Math.sin(rad + 0.55) * head);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 
   function startWaveAnimation() {
@@ -508,13 +598,12 @@
   }
 
   function visibleWindAnchors(canvas, map) {
-    const frame = currentWindFrame();
-    const pts = frame?.points || [];
-    if (!pts.length || !map) return [];
-    return pts.filter(p => {
+    const anchors = windAnchors();
+    if (!anchors.length || !map) return [];
+    return anchors.filter(p => {
       const lat = Number(p.lat), lon = Number(p.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-      if (!isNearPacificCoast(lat, lon)) return false;
+      if (!isNearWindCorridor(lat, lon)) return false;
       const pt = map.latLngToContainerPoint([lat, lon]);
       return pt.x > -120 && pt.y > -120 && pt.x < canvas.width + 120 && pt.y < canvas.height + 120;
     });
@@ -540,51 +629,92 @@
 
   function isNearPacificCoast(lat, lon) {
     const coast = approxCoastLon(Number(lat));
-    // Keep wind display near the Pacific coastal corridor; do not paint the whole continent.
-    return lon >= coast - 4.2 && lon <= coast + 0.45;
+    return lon >= coast - 4.0 && lon <= coast + 0.08;
+  }
+
+  function isNearWindCorridor(lat, lon) {
+    const coast = approxCoastLon(Number(lat));
+    // Keep visual wind hyperlocal to the surf corridor: beaches + nearshore water,
+    // not inland deserts or the whole continent.
+    return lon >= coast - 1.55 && lon <= coast + 0.10 && lat >= 30.35 && lat <= 42.7;
+  }
+
+  function windAnchors() {
+    const key = `${state.windFrameIndex}|${Object.keys(state.forecasts || {}).length}`;
+    if (state.windAnchorCache?.key === key) return state.windAnchorCache.pts;
+    const frame = currentWindFrame();
+    const pts = [];
+
+    // Model grid anchors, restricted to the coastal strip.
+    for (const p of (frame?.points || [])) {
+      if (isNearWindCorridor(Number(p.lat), Number(p.lon))) {
+        pts.push({ lat: Number(p.lat), lon: Number(p.lon), speed_kt: Number(p.speed_kt || 0), direction_deg: Number(p.direction_deg), source: "grid", weight: 0.55 });
+      }
+    }
+
+    // Spot-level forecasts are more local than the coarse visual grid, so they get
+    // higher weight. This makes the wind display change near actual beaches.
+    for (const spot of activeSpots()) {
+      const fc = forecastFor(spot.id);
+      const w = fc?.wind || {};
+      const speed = Number(w.speed_kt);
+      const dir = Number(w.direction_deg);
+      if (Number.isFinite(speed) && Number.isFinite(dir)) {
+        pts.push({ lat: Number(spot.lat), lon: Number(spot.lon), speed_kt: speed, direction_deg: dir, source: "spot", weight: 1.75 });
+      }
+    }
+    const clean = pts.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Number.isFinite(p.speed_kt) && Number.isFinite(p.direction_deg));
+    state.windAnchorCache = { key, pts: clean };
+    return clean;
   }
 
   function windVectorAt(lat, lon) {
-    const frame = currentWindFrame();
-    const pts = frame?.points || [];
-    if (!pts.length || !isNearPacificCoast(lat, lon)) return null;
+    lat = Number(lat); lon = Number(lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !isNearWindCorridor(lat, lon)) return null;
+    const pts = windAnchors();
+    if (!pts.length) return null;
     const nearest = [];
     for (const p of pts) {
-      if (!isNearPacificCoast(Number(p.lat), Number(p.lon))) continue;
-      const d = Math.pow(Number(p.lat) - lat, 2) + Math.pow(Number(p.lon) - lon, 2);
-      nearest.push({ p, d });
+      if (!isNearWindCorridor(Number(p.lat), Number(p.lon))) continue;
+      const dLat = Number(p.lat) - lat;
+      const dLon = (Number(p.lon) - lon) * Math.cos(lat * Math.PI / 180);
+      const d2 = dLat * dLat + dLon * dLon;
+      // Tight radius gives localized beaches instead of one broad continental field.
+      if (d2 > (p.source === "spot" ? 0.92 : 1.15)) continue;
+      nearest.push({ p, d: d2 });
     }
     nearest.sort((a, b) => a.d - b.d);
-    if (!nearest.length || nearest[0].d > 0.75) return null;
-    let u = 0, v = 0, wsum = 0, speedSum = 0;
-    for (const item of nearest.slice(0, 4)) {
+    if (!nearest.length) return null;
+
+    let u = 0, v = 0, wsum = 0;
+    for (const item of nearest.slice(0, 8)) {
       const p = item.p;
       const speed = Math.max(0, Number(p.speed_kt || 0));
       const dir = Number(p.direction_deg);
       if (!Number.isFinite(speed) || !Number.isFinite(dir)) continue;
       const rad = (270 - dir) * Math.PI / 180;
-      const w = 1 / Math.max(0.015, item.d);
+      const w = Number(p.weight || 1) / Math.max(0.018, item.d);
       u += Math.cos(rad) * speed * w;
       v += Math.sin(rad) * speed * w;
-      speedSum += speed * w;
       wsum += w;
     }
     if (!wsum) return null;
-    const speed = Math.hypot(u / wsum, v / wsum);
-    const dir = (270 - Math.atan2(v / wsum, u / wsum) * 180 / Math.PI + 360) % 360;
-    return { speed_kt: speed || speedSum / wsum, direction_deg: dir };
+    const uu = u / wsum, vv = v / wsum;
+    const speed = Math.hypot(uu, vv);
+    const dir = (270 - Math.atan2(vv, uu) * 180 / Math.PI + 360) % 360;
+    return { speed_kt: speed, direction_deg: dir };
   }
 
   function newWindParticle(canvas) {
     const anchors = visibleWindAnchors(canvas, state.map);
     if (anchors.length && state.map) {
       const a = anchors[Math.floor(Math.random() * anchors.length)];
-      const jitterLat = (Math.random() - .5) * .45;
-      const jitterLon = (Math.random() - .5) * .70;
+      const jitterLat = (Math.random() - .5) * .20;
+      const jitterLon = (Math.random() - .5) * .32;
       const pt = state.map.latLngToContainerPoint([Number(a.lat) + jitterLat, Number(a.lon) + jitterLon]);
-      return { x: pt.x, y: pt.y, age: Math.random() * 70, maxAge: 36 + Math.random() * 48 };
+      return { x: pt.x, y: pt.y, age: Math.random() * 54, maxAge: 34 + Math.random() * 44 };
     }
-    return { x: Math.random() * canvas.width, y: Math.random() * canvas.height, age: Math.random() * 70, maxAge: 45 + Math.random() * 55 };
+    return { x: Math.random() * canvas.width, y: Math.random() * canvas.height, age: Math.random() * 45, maxAge: 40 + Math.random() * 45 };
   }
 
   function drawWindLayerCanvas(ctx, canvas, map) {
@@ -592,27 +722,31 @@
     const frame = currentWindFrame();
     ctx.save();
     ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "rgba(0,0,0,.13)";
+    ctx.fillStyle = "rgba(0,0,0,.16)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
     resetWindParticles();
-    const opacity = Math.max(.15, Math.min(.95, Number(state.config.wind_layer_opacity ?? .86)));
+    const opacity = Math.max(.20, Math.min(.98, Number(state.config.wind_layer_opacity ?? .86)));
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.lineWidth = window.innerWidth < 760 ? 1.05 : 1.35;
+    ctx.lineWidth = window.innerWidth < 760 ? 2.15 : 1.85;
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(0,0,0,.82)";
+    ctx.shadowBlur = 4;
     for (const p of state.windParticles) {
       if (p.age++ > p.maxAge || p.x < -10 || p.y < -10 || p.x > canvas.width + 10 || p.y > canvas.height + 10) Object.assign(p, newWindParticle(canvas));
       const ll = map.containerPointToLatLng([p.x, p.y]);
+      if (!isNearWindCorridor(ll.lat, ll.lng)) { Object.assign(p, newWindParticle(canvas)); continue; }
       const wind = windVectorAt(ll.lat, ll.lng);
       if (!wind || wind.direction_deg == null) { Object.assign(p, newWindParticle(canvas)); continue; }
       const speed = Math.max(1, Number(wind.speed_kt || 4));
       const motionDeg = (Number(wind.direction_deg) + 180) % 360;
       const rad = (motionDeg - 90) * Math.PI / 180;
-      const step = Math.max(0.55, Math.min(4.8, speed * 0.115 * (window.innerWidth < 760 ? .80 : 1)));
+      const step = Math.max(0.75, Math.min(5.8, speed * 0.15 * (window.innerWidth < 760 ? .86 : 1)));
       const nx = p.x + Math.cos(rad) * step;
       const ny = p.y + Math.sin(rad) * step;
-      ctx.strokeStyle = speed <= 6 ? "rgba(130,245,210,.78)" : speed <= 13 ? "rgba(255,225,122,.74)" : "rgba(255,160,112,.72)";
+      ctx.strokeStyle = speed <= 6 ? "rgba(132,255,226,.96)" : speed <= 13 ? "rgba(255,229,118,.94)" : "rgba(255,144,103,.92)";
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
@@ -880,6 +1014,10 @@
       refreshMarkerIcons();
       renderSpotList();
     });
+    $("nearMeButton")?.addEventListener("click", e => {
+      e.preventDefault();
+      centerOnUserLocation(true);
+    });
   }
 
   function setupInstallPrompt() {
@@ -949,6 +1087,66 @@
     }
   }
 
+  function distanceKm(aLat, aLon, bLat, bLon) {
+    const R = 6371;
+    const dLat = (bLat - aLat) * Math.PI / 180;
+    const dLon = (bLon - aLon) * Math.PI / 180;
+    const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2);
+    const q = s1 * s1 + Math.cos(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180) * s2 * s2;
+    return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(Math.max(0, 1 - q)));
+  }
+
+  function nearestForecastSpotTo(lat, lon) {
+    return activeSpots()
+      .filter(s => forecastFor(s.id))
+      .map(s => ({ spot: s, km: distanceKm(lat, lon, Number(s.lat), Number(s.lon)) }))
+      .sort((a, b) => a.km - b.km)[0]?.spot || null;
+  }
+
+  function centerOnUserLocation(forcePrompt = false) {
+    const btn = $("nearMeButton");
+    if (!navigator.geolocation) {
+      if (btn) btn.textContent = "Location unavailable";
+      return;
+    }
+    if (btn) btn.textContent = "Locating…";
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      state.userLocation = { lat, lon };
+      const nearest = nearestForecastSpotTo(lat, lon);
+      if (nearest) {
+        // Region follows nearest spot, but the page itself never scrolls.
+        const regionKey = Object.entries(REGION_DEFS).find(([key, def]) => key !== "all" && def.match(nearest))?.[0];
+        preservePagePosition(() => {
+          if (regionKey) state.region = regionKey;
+          syncRegionChips();
+          renderSpotList();
+          drawMarkers({ fit: true });
+          selectSpot(nearest.id, true, true);
+        });
+        if (btn) btn.textContent = "Near me";
+      } else {
+        if (btn) btn.textContent = "Near me";
+      }
+    }, err => {
+      if (btn) btn.textContent = "Near me";
+      if (forcePrompt) alert("Location was not available. Enable location access to center on your nearest beaches.");
+      console.warn("Geolocation unavailable", err);
+    }, { enableHighAccuracy: false, timeout: 9000, maximumAge: 10 * 60 * 1000 });
+  }
+
+  function maybeAutoCenterOnLocation() {
+    if (state.config.auto_center_nearest_beaches === false || !navigator.geolocation) return;
+    // Do not surprise new users with a permission dialog; auto-center only when
+    // location has already been granted. The Near me button always prompts.
+    if (navigator.permissions?.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(status => {
+        if (status.state === "granted") centerOnUserLocation(false);
+      }).catch(() => {});
+    }
+  }
+
   function rowToSpot(row) {
     return {
       id: row.id,
@@ -997,6 +1195,7 @@
       renderSpotList();
       const first = filteredSpots().find(s => forecastFor(s.id)) || filteredSpots()[0] || activeSpots()[0];
       if (first) selectSpot(first.id, false, false);
+      maybeAutoCenterOnLocation();
     } catch (err) {
       console.error(err);
       $("globalStatus").textContent = "Data failed to load";

@@ -1,13 +1,22 @@
 # CaliSurf Light
 
-**west coast model V2.0**
+**west coast model V2.1**
 
 Static Netlify surf app + GitHub Actions forecast pipeline + Supabase-ready admin backend.
 
 
-## V2.0 visual/admin/mobile hotfix
+## V2.1 wave/wind/location hotfix
 
-This update addresses the post-deploy issues visible on mobile and desktop:
+This update specifically fixes the mobile screenshot issues from V2.0:
+
+- Replaces vertical bar/orb artifacts with a continuous sampled wave raster masked to the ocean side of the California coast approximation, so the layer does not paint over land.
+- Makes wave arrows and wind particles brighter, thicker, and easier to see.
+- Constrains wind particles to the nearshore surf corridor and blends spot-level forecast winds with the grid, so the wind view looks more hyperlocal instead of continent-wide.
+- Adds a **Near me** button and automatic nearest-beach centering when browser location permission is already granted.
+- Keeps map-marker clicks synced with the surf-spot list without page scrolling.
+- Lowers default mobile detail scale and exposes the setting in admin.
+
+This update also carries forward the V2.0 visual/admin/mobile fixes:
 
 - Replaces the orb-style wave layer with a smoother raster/cell-based semi-transparent wave field.
 - Makes the wind visualization coastal/hyperlocal by limiting particles to the California coastal corridor and interpolating nearby wind-grid points instead of painting the entire continent.

@@ -14,7 +14,7 @@
   "default_region": "san-diego",
   "layout": "full",
   "wave_layer_enabled": true,
-  "wave_layer_opacity": 0.26,
+  "wave_layer_opacity": 0.3,
   "wave_animation_ms": 1150,
   "show_wave_direction_arrows": true,
   "show_cards": {
@@ -32,9 +32,9 @@
   "show_wind_arrows": true,
   "hidden_spot_ids": [],
   "added_spots": [],
-  "mobile_detail_scale": 0.7,
+  "mobile_detail_scale": 0.64,
   "wind_layer_enabled": true,
-  "wind_layer_opacity": 0.86,
+  "wind_layer_opacity": 0.92,
   "wind_particle_density": 1.45,
   "auto_scroll_selected_list": false,
   "auto_scroll_region_chips": false,
@@ -42,5 +42,6 @@
     "enabled": false,
     "url": "",
     "anon_key": ""
-  }
+  },
+  "auto_center_nearest_beaches": true
 }

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'calisurf-light-pwa-v20-hyperlocal-admin-layout-2026-06-04';
+const CACHE_VERSION = 'calisurf-light-pwa-v21-wave-raster-location-2026-06-04';
 const APP_SHELL = [
   './',
   './index.html',

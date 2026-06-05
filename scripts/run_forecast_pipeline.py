@@ -1090,12 +1090,17 @@ def frange(start: float, stop: float, step: float) -> List[float]:
 
 
 def california_wave_grid_points() -> List[Dict[str, float]]:
-    """Nearshore/offshore Pacific grid for a smooth wave-height raster layer."""
+    """Nearshore/offshore Pacific grid for the smooth wave-height raster layer.
+
+    V2.1 keeps the grid offshore and a bit denser so the browser can
+    interpolate a continuous color map instead of drawing disconnected blobs.
+    """
     pts: List[Dict[str, float]] = []
-    for lat in frange(30.5, 42.5, 0.5):
+    for lat in frange(30.5, 42.5, 0.35):
         coast = approx_coast_lon(lat)
-        # Wave field should live mostly offshore, not over inland California.
-        for lon in frange(coast - 4.2, coast - 0.15, 0.5):
+        # Wave field should live offshore only, never inland. The browser also
+        # masks land at draw time.
+        for lon in frange(coast - 3.7, coast - 0.08, 0.35):
             pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
     return pts
 
@@ -1120,7 +1125,7 @@ def synthetic_wave_grid(generated_at: dt.datetime, status: str = "wave_grid:fall
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v1",
+        "model": "calisurf-wave-grid-v2.1",
         "source": status,
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
@@ -1192,7 +1197,7 @@ def fetch_wave_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v1",
+        "model": "calisurf-wave-grid-v2.1",
         "source": "Open-Meteo Marine API best-match wave model grid; drawn client-side as semitransparent wave-height colorization",
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
@@ -1218,13 +1223,16 @@ def approx_coast_lon(lat: float) -> float:
 
 
 def california_wind_grid_points() -> List[Dict[str, float]]:
-    """Coastal-corridor wind grid; avoids painting wind across the whole continent."""
+    """Hyperlocal coastal-corridor wind grid for particles.
+
+    The broad offshore/inland grid made wind look like one continent-scale
+    pattern. V2.1 samples a tighter nearshore strip; the browser blends these
+    points with spot-level forecast winds to show beach-scale differences.
+    """
     pts: List[Dict[str, float]] = []
-    for lat in frange(30.5, 42.5, 0.5):
+    for lat in frange(30.5, 42.5, 0.32):
         coast = approx_coast_lon(lat)
-        # Dense coastal/offshore strip only. This gives a local-looking display
-        # while keeping GitHub Action and mobile JSON payloads small.
-        for lon in frange(coast - 3.4, coast + 0.25, 0.5):
+        for lon in frange(coast - 1.65, coast + 0.05, 0.32):
             pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
     return pts
 
@@ -1246,7 +1254,7 @@ def synthetic_wind_grid(generated_at: dt.datetime, status: str = "wind_grid:fall
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WIND_GRID_HOURS,
-        "model": "calisurf-wind-grid-v1",
+        "model": "calisurf-wind-grid-v2.1",
         "source": status,
         "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
@@ -1308,7 +1316,7 @@ def fetch_wind_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WIND_GRID_HOURS,
-        "model": "calisurf-wind-grid-v1",
+        "model": "calisurf-wind-grid-v2.1",
         "source": "Open-Meteo Weather Forecast API best-match 10 m wind grid; set OPEN_METEO_WIND_MODELS to force HRRR/GFS where supported",
         "units": {"speed": "kt", "direction": "degrees true, wind comes from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},

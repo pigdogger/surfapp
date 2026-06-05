@@ -16,7 +16,7 @@
   --base-font-scale: .92;
   --corner-radius: 8px;
   --edge-buffer: 16px;
-  --mobile-detail-scale: .78;
+  --mobile-detail-scale: .66;
   --wind-layer-opacity: .86;
   color-scheme: dark;
 }
@@ -70,6 +70,7 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   font-weight: 800;
 }
 .install-btn { background: rgba(27,184,212,.18); color: white; }
+.location-btn { background: rgba(255,255,255,.12); }
 
 .layout {
   display: grid;
@@ -147,7 +148,7 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
 .leaflet-container { background: #06121b; font-family: Raleway, sans-serif; }
 .leaflet-control-attribution { display: none !important; }
 .wave-grid-canvas, .wind-grid-canvas { pointer-events: none; }
-.wave-grid-canvas { mix-blend-mode: multiply; }
+.wave-grid-canvas { mix-blend-mode: normal; }
 .wind-grid-canvas { opacity: var(--wind-layer-opacity); }
 
 .spot-marker {
@@ -303,7 +304,7 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   .app-shell, .admin-shell { padding: max(10px, calc(var(--edge-buffer) * .65)); overflow-x: hidden; }
   .topbar { align-items: flex-start; flex-direction: column; gap: 10px; }
   .brand-block { gap: 10px; }
-  .app-logo { width: 96px; height: 96px; }
+  .app-logo { width: 104px; height: 104px; }
   .top-actions { width: 100%; justify-content: flex-start; }
   .status-pill { align-self: flex-start; }
   .layout { grid-template-columns: 1fr; gap: 12px; }
@@ -319,15 +320,15 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   .side-panel { max-height: 42vh; margin-left: 3px; margin-right: 3px; }
   .spot-list { max-height: calc(42vh - 66px); }
   .card-grid { grid-template-columns: 1fr; }
-  .forecast-panel { font-size: calc(.82rem * var(--mobile-detail-scale)); padding: max(8px, calc(11px * var(--mobile-detail-scale))); max-width: 100%; overflow-x: hidden; }
+  .forecast-panel { font-size: calc(.76rem * var(--mobile-detail-scale)); padding: max(8px, calc(11px * var(--mobile-detail-scale))); max-width: 100%; overflow-x: hidden; }
   .forecast-head { flex-direction: row; align-items: flex-start; gap: 9px; }
   .forecast-title h2 { font-size: calc(1.08rem * var(--mobile-detail-scale)); line-height: 1.04; }
   .forecast-title p { font-size: calc(.70rem * var(--mobile-detail-scale)); }
   .big-height { text-align: right; min-width: 62px; }
   .big-height strong { font-size: calc(1.24rem * var(--mobile-detail-scale)); }
   .info-card { padding: max(8px, calc(10px * var(--mobile-detail-scale))); }
-  .metric-main { font-size: calc(.82rem * var(--mobile-detail-scale)); line-height: 1.16; }
-  .metric-sub { font-size: calc(.68rem * var(--mobile-detail-scale)); line-height: 1.18; }
+  .metric-main { font-size: calc(.76rem * var(--mobile-detail-scale)); line-height: 1.16; }
+  .metric-sub { font-size: calc(.62rem * var(--mobile-detail-scale)); line-height: 1.18; }
   .snapshot-row { grid-auto-columns: 54px; }
   .five-day-grid { display: flex; grid-template-columns: none; overflow-x: auto; gap: 10px; padding-bottom: 8px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
   .day-column { flex: 0 0 min(76vw, 265px); min-width: min(76vw, 265px); scroll-snap-align: start; }

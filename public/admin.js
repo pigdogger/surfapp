@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-direct · v2.0. */
+/* CaliSurf Light admin console · Supabase-direct · v2.1. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -11,13 +11,14 @@
     typography_scale: 0.88,
     corner_radius: 8,
     edge_buffer: 16,
-    mobile_detail_scale: 0.70,
+    mobile_detail_scale: 0.64,
     wave_layer_enabled: true,
     wave_layer_opacity: 0.26,
     show_wave_direction_arrows: true,
     wind_layer_enabled: true,
     wind_layer_opacity: 0.86,
     wind_particle_density: 1.45,
+    auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
     default_region: "san-diego",
@@ -149,7 +150,8 @@
     $("fontScale").value = c.typography_scale;
     $("cornerRadius").value = c.corner_radius ?? 8;
     $("edgeBuffer").value = c.edge_buffer ?? 22;
-    $("mobileDetailScale").value = c.mobile_detail_scale ?? 0.92;
+    $("mobileDetailScale").value = c.mobile_detail_scale ?? 0.64;
+    if ($("autoCenterNearest")) $("autoCenterNearest").checked = c.auto_center_nearest_beaches !== false;
     $("waveLayerEnabled").checked = c.wave_layer_enabled !== false;
     $("waveLayerOpacity").value = c.wave_layer_opacity ?? 0.44;
     $("showWaveDirectionArrows").checked = c.show_wave_direction_arrows !== false;
@@ -187,6 +189,7 @@
       wind_layer_enabled: $("windLayerEnabled").checked,
       wind_layer_opacity: Number($("windLayerOpacity").value),
       wind_particle_density: Number($("windParticleDensity").value),
+      auto_center_nearest_beaches: $("autoCenterNearest")?.checked !== false,
       default_region: $("defaultRegion").value,
       layout: $("layoutMode").value,
       show_cards: {
@@ -353,7 +356,7 @@
     $("loginButton").addEventListener("click", attemptLogin);
     $("loginPassword").addEventListener("keydown", e => { if (e.key === "Enter") attemptLogin(); });
     $("logoutButton").addEventListener("click", logout);
-    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
+    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "autoCenterNearest", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
     $("saveConfig").addEventListener("click", save);
     $("downloadConfig").addEventListener("click", () => { readConfigFromForm(); download("site_config.json", JSON.stringify(state.config, null, 2)); });
     $("resetConfig").addEventListener("click", () => { state.config = structuredClone(DEFAULT_CONFIG); localStorage.removeItem("surfAppAdminConfig"); applyConfigToForm(); renderSpotList(); });
