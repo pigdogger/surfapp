@@ -1,21 +1,23 @@
 # CaliSurf Light
 
-**west coast model V2.4**
+**west coast model V2.5**
 
 Static Netlify surf app + GitHub Actions forecast pipeline + Supabase-ready admin backend.
 
 
-## V2.4 gradient + sticky mobile map update
+## V2.5 admin propagation + WaveWatch-ready layer controls
 
-- Makes the mobile header/logo/title and banner map sticky while the spot list and forecast panels scroll below.
-- Restores the spot-list panel to a scrollable window showing about five to six spots.
-- Removes wave/wind pause buttons; layers are controlled by simple on/off checkboxes.
-- Adds configurable wind-speed, spot-quality, and wave-height gradients in the admin aesthetic controls.
-- Colors wind particles and forecast wind estimates from light blue to red by wind speed/quality.
-- Adds a map color-scale legend and hides zoom controls when the map is minimized.
-- Improves the wave raster mask by using the surf-spot coastline as the clipping curve, reducing coastline gaps and land spillover.
-- Changes the snapshots card to 48 hours.
-- Makes the main height report a day-range from the 6 AM–7 PM forecast window.
+- Makes spot-list height badges use the same **daily range** used in the main forecast card.
+- Public app no longer lets stale localStorage fallback settings disable a valid Supabase connection.
+- Public app reads `site_settings.public` from Supabase on page load and merges those values into the live UI.
+- Adds admin controls for editable title-card text, search placeholder, font family, font weights, kerning/letter spacing, and text colors.
+- Adds admin controls for wind line size, length, opacity, speed, density, shape, and speed-gradient colors/endpoints.
+- Adds admin controls for wave-arrow size, color, opacity, stroke, and nearshore overlap.
+- Adds an adjustable map tint/shading layer between the Esri Ocean Basemap and all overlays/markers so the map can be darkened without dimming the markers/wind/wave graphics.
+- Makes the wind particles draw as controllable moving line streaks using the configured wind speed gradient.
+- Improves wave raster shoreline overlap/clipping controls and leaves the wave layer default-off unless enabled in admin.
+- Adds `scripts/fetch_noaa_wavewatch_grid.py`, an optional NOAA/NCEP GFS-Wave/WaveWatch direct GRIB2 ingestion helper for the later high-fidelity model path; the default production path remains the lighter JSON gateway unless you explicitly enable direct GRIB parsing.
+
 
 
 ## V2.3 mobile map + wind-pattern + layer-cleanup update

@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-direct · v2.4 gradient controls. */
+/* CaliSurf Light admin console · Supabase-direct · v2.5 typography, wind/wave, map tint controls. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -11,6 +11,8 @@
       spot_rating: { poor: "#e05b52", fair: "#f4c542", good: "#1ecb78", flat: "#8da2af" },
       wave_height: { min: 0, max: 18, low: "#1eb6d0", mid: "#22c55e", high: "#f97316" }
     },
+    text: { model_label: "WEST COAST MODEL V1", app_title: "CaliSurf Light", refresh_prefix: "model refresh:", install_label: "Install app", search_placeholder: "Search surf spots…" },
+    typography: { family: "Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", title_weight: 800, body_weight: 600, spot_name_weight: 800, spot_meta_weight: 600, letter_spacing: 0, title_color: "#ffffff", label_color: "#8edceb", spot_name_color: "#ffffff", spot_meta_color: "#a6bfcc" },
     marker_size: 7,
     marker_color_mode: "rating",
     typography_scale: 0.86,
@@ -23,6 +25,17 @@
     wind_layer_enabled: true,
     wind_layer_opacity: 0.62,
     wind_particle_density: 1.05,
+    wind_particle_size: 1.0,
+    wind_particle_length: 1.0,
+    wind_particle_speed: 1.0,
+    wind_particle_opacity: 1.0,
+    wind_particle_shape: "line",
+    map_tint_opacity: 0.18,
+    wave_arrow_size: 1.0,
+    wave_arrow_color: "#ecffff",
+    wave_arrow_opacity: 0.96,
+    wave_arrow_stroke: 2.6,
+    wave_nearshore_overlap: 0.018,
     auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
@@ -157,11 +170,27 @@
     if ($("spotFairColor")) $("spotFairColor").value = c.gradients?.spot_rating?.fair || "#f4c542";
     if ($("spotGoodColor")) $("spotGoodColor").value = c.gradients?.spot_rating?.good || "#1ecb78";
     if ($("windLowColor")) $("windLowColor").value = c.gradients?.wind_speed?.low || "#8ee8ff";
+    if ($("windMidColor")) $("windMidColor").value = c.gradients?.wind_speed?.mid || "#f4c542";
     if ($("windHighColor")) $("windHighColor").value = c.gradients?.wind_speed?.high || "#ef4444";
     if ($("windMinSpeed")) $("windMinSpeed").value = c.gradients?.wind_speed?.min ?? 0;
     if ($("windMaxSpeed")) $("windMaxSpeed").value = c.gradients?.wind_speed?.max ?? 24;
     if ($("waveLowColor")) $("waveLowColor").value = c.gradients?.wave_height?.low || "#1eb6d0";
+    if ($("waveMidColor")) $("waveMidColor").value = c.gradients?.wave_height?.mid || "#22c55e";
     if ($("waveHighColor")) $("waveHighColor").value = c.gradients?.wave_height?.high || "#f97316";
+    if ($("modelLabelText")) $("modelLabelText").value = c.text?.model_label ?? "WEST COAST MODEL V1";
+    if ($("appTitleText")) $("appTitleText").value = c.text?.app_title ?? "CaliSurf Light";
+    if ($("refreshPrefixText")) $("refreshPrefixText").value = c.text?.refresh_prefix ?? "model refresh:";
+    if ($("searchPlaceholderText")) $("searchPlaceholderText").value = c.text?.search_placeholder ?? "Search surf spots…";
+    if ($("fontFamily")) $("fontFamily").value = c.typography?.family || DEFAULT_CONFIG.typography.family;
+    if ($("titleWeight")) $("titleWeight").value = c.typography?.title_weight ?? 800;
+    if ($("bodyWeight")) $("bodyWeight").value = c.typography?.body_weight ?? 600;
+    if ($("spotNameWeight")) $("spotNameWeight").value = c.typography?.spot_name_weight ?? 800;
+    if ($("spotMetaWeight")) $("spotMetaWeight").value = c.typography?.spot_meta_weight ?? 600;
+    if ($("letterSpacing")) $("letterSpacing").value = c.typography?.letter_spacing ?? 0;
+    if ($("titleColor")) $("titleColor").value = c.typography?.title_color || "#ffffff";
+    if ($("labelColor")) $("labelColor").value = c.typography?.label_color || "#8edceb";
+    if ($("spotNameColor")) $("spotNameColor").value = c.typography?.spot_name_color || "#ffffff";
+    if ($("spotMetaColor")) $("spotMetaColor").value = c.typography?.spot_meta_color || "#a6bfcc";
     $("fontScale").value = c.typography_scale;
     $("cornerRadius").value = c.corner_radius ?? 8;
     $("edgeBuffer").value = c.edge_buffer ?? 22;
@@ -173,6 +202,17 @@
     $("windLayerEnabled").checked = c.wind_layer_enabled !== false;
     $("windLayerOpacity").value = c.wind_layer_opacity ?? 0.62;
     $("windParticleDensity").value = c.wind_particle_density ?? 1.05;
+    if ($("windParticleSize")) $("windParticleSize").value = c.wind_particle_size ?? 1.0;
+    if ($("windParticleLength")) $("windParticleLength").value = c.wind_particle_length ?? 1.0;
+    if ($("windParticleSpeed")) $("windParticleSpeed").value = c.wind_particle_speed ?? 1.0;
+    if ($("windParticleOpacity")) $("windParticleOpacity").value = c.wind_particle_opacity ?? 1.0;
+    if ($("windParticleShape")) $("windParticleShape").value = c.wind_particle_shape || "line";
+    if ($("mapTintOpacity")) $("mapTintOpacity").value = c.map_tint_opacity ?? 0.18;
+    if ($("waveArrowSize")) $("waveArrowSize").value = c.wave_arrow_size ?? 1.0;
+    if ($("waveArrowColor")) $("waveArrowColor").value = c.wave_arrow_color || "#ecffff";
+    if ($("waveArrowOpacity")) $("waveArrowOpacity").value = c.wave_arrow_opacity ?? 0.96;
+    if ($("waveArrowStroke")) $("waveArrowStroke").value = c.wave_arrow_stroke ?? 2.6;
+    if ($("waveNearshoreOverlap")) $("waveNearshoreOverlap").value = c.wave_nearshore_overlap ?? 0.018;
     $("defaultRegion").value = c.default_region || "san-diego";
     $("layoutMode").value = c.layout;
     $("cardSwell").checked = c.show_cards.swell !== false;
@@ -194,8 +234,27 @@
       theme: { bg: $("bgColor").value, panel: $("panelColor").value, accent: $("accentColor").value, accent2: $("accent2Color").value },
       gradients: {
         spot_rating: { poor: $("spotPoorColor")?.value || "#e05b52", fair: $("spotFairColor")?.value || "#f4c542", good: $("spotGoodColor")?.value || "#1ecb78", flat: state.config.gradients?.spot_rating?.flat || "#8da2af" },
-        wind_speed: { min: Number($("windMinSpeed")?.value ?? 0), max: Number($("windMaxSpeed")?.value ?? 24), low: $("windLowColor")?.value || "#8ee8ff", mid: state.config.gradients?.wind_speed?.mid || "#f4c542", high: $("windHighColor")?.value || "#ef4444" },
-        wave_height: { min: state.config.gradients?.wave_height?.min ?? 0, max: state.config.gradients?.wave_height?.max ?? 18, low: $("waveLowColor")?.value || "#1eb6d0", mid: state.config.gradients?.wave_height?.mid || "#22c55e", high: $("waveHighColor")?.value || "#f97316" }
+        wind_speed: { min: Number($("windMinSpeed")?.value ?? 0), max: Number($("windMaxSpeed")?.value ?? 24), low: $("windLowColor")?.value || "#8ee8ff", mid: $("windMidColor")?.value || "#f4c542", high: $("windHighColor")?.value || "#ef4444" },
+        wave_height: { min: state.config.gradients?.wave_height?.min ?? 0, max: state.config.gradients?.wave_height?.max ?? 18, low: $("waveLowColor")?.value || "#1eb6d0", mid: $("waveMidColor")?.value || "#22c55e", high: $("waveHighColor")?.value || "#f97316" }
+      },
+      text: {
+        model_label: $("modelLabelText")?.value ?? state.config.text?.model_label,
+        app_title: $("appTitleText")?.value ?? state.config.text?.app_title,
+        refresh_prefix: $("refreshPrefixText")?.value ?? state.config.text?.refresh_prefix,
+        install_label: state.config.text?.install_label || "Install app",
+        search_placeholder: $("searchPlaceholderText")?.value ?? state.config.text?.search_placeholder
+      },
+      typography: {
+        family: $("fontFamily")?.value || DEFAULT_CONFIG.typography.family,
+        title_weight: Number($("titleWeight")?.value ?? 800),
+        body_weight: Number($("bodyWeight")?.value ?? 600),
+        spot_name_weight: Number($("spotNameWeight")?.value ?? 800),
+        spot_meta_weight: Number($("spotMetaWeight")?.value ?? 600),
+        letter_spacing: Number($("letterSpacing")?.value ?? 0),
+        title_color: $("titleColor")?.value || "#ffffff",
+        label_color: $("labelColor")?.value || "#8edceb",
+        spot_name_color: $("spotNameColor")?.value || "#ffffff",
+        spot_meta_color: $("spotMetaColor")?.value || "#a6bfcc"
       },
       marker_size: Number($("markerSize").value),
       marker_color_mode: $("markerColorMode").value,
@@ -209,6 +268,17 @@
       wind_layer_enabled: $("windLayerEnabled").checked,
       wind_layer_opacity: Number($("windLayerOpacity").value),
       wind_particle_density: Number($("windParticleDensity").value),
+      wind_particle_size: Number($("windParticleSize")?.value ?? 1.0),
+      wind_particle_length: Number($("windParticleLength")?.value ?? 1.0),
+      wind_particle_speed: Number($("windParticleSpeed")?.value ?? 1.0),
+      wind_particle_opacity: Number($("windParticleOpacity")?.value ?? 1.0),
+      wind_particle_shape: $("windParticleShape")?.value || "line",
+      map_tint_opacity: Number($("mapTintOpacity")?.value ?? 0.18),
+      wave_arrow_size: Number($("waveArrowSize")?.value ?? 1.0),
+      wave_arrow_color: $("waveArrowColor")?.value || "#ecffff",
+      wave_arrow_opacity: Number($("waveArrowOpacity")?.value ?? 0.96),
+      wave_arrow_stroke: Number($("waveArrowStroke")?.value ?? 2.6),
+      wave_nearshore_overlap: Number($("waveNearshoreOverlap")?.value ?? 0.018),
       auto_center_nearest_beaches: $("autoCenterNearest")?.checked !== false,
       default_region: $("defaultRegion").value,
       layout: $("layoutMode").value,
@@ -234,7 +304,7 @@
     if (state.supabaseReady && state.supabase && state.session) {
       const { error } = await state.supabase.from("site_settings").upsert({ key: "public", value: state.config, updated_at: new Date().toISOString() });
       if (error) { alert("Supabase save failed: " + error.message); return; }
-      alert("Saved to Supabase. Public app settings update on next page load.");
+      alert("Saved to Supabase. Refresh the public app; it will load these settings from the site_settings table.");
       return;
     }
     localStorage.setItem("surfAppAdminConfig", JSON.stringify(state.config, null, 2));
@@ -386,7 +456,7 @@
     $("loginButton").addEventListener("click", attemptLogin);
     $("loginPassword").addEventListener("keydown", e => { if (e.key === "Enter") attemptLogin(); });
     $("logoutButton").addEventListener("click", logout);
-    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "autoCenterNearest", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
+    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "spotPoorColor", "spotFairColor", "spotGoodColor", "windLowColor", "windMidColor", "windHighColor", "windMinSpeed", "windMaxSpeed", "waveLowColor", "waveMidColor", "waveHighColor", "modelLabelText", "appTitleText", "refreshPrefixText", "searchPlaceholderText", "fontFamily", "titleWeight", "bodyWeight", "spotNameWeight", "spotMetaWeight", "letterSpacing", "titleColor", "labelColor", "spotNameColor", "spotMetaColor", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "autoCenterNearest", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "windParticleSize", "windParticleLength", "windParticleSpeed", "windParticleOpacity", "windParticleShape", "mapTintOpacity", "waveArrowSize", "waveArrowColor", "waveArrowOpacity", "waveArrowStroke", "waveNearshoreOverlap", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
     $("saveConfig").addEventListener("click", save);
     $("downloadConfig").addEventListener("click", () => { readConfigFromForm(); download("site_config.json", JSON.stringify(state.config, null, 2)); });
     $("resetConfig").addEventListener("click", () => { state.config = structuredClone(DEFAULT_CONFIG); localStorage.removeItem("surfAppAdminConfig"); applyConfigToForm(); renderSpotList(); });

@@ -1,4 +1,4 @@
-/* CaliSurf Light public app · west coast model V2.4 · wind gradients · sticky header/map · no build step. */
+/* CaliSurf Light public app · west coast model V2.5 · admin typography, map tint, WaveWatch-ready layers · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
@@ -7,6 +7,25 @@
       wind_speed: { min: 0, max: 24, low: "#8ee8ff", mid: "#f4c542", high: "#ef4444" },
       spot_rating: { poor: "#e05b52", fair: "#f4c542", good: "#1ecb78", flat: "#8da2af" },
       wave_height: { min: 0, max: 18, low: "#1eb6d0", mid: "#22c55e", high: "#f97316" }
+    },
+    text: {
+      model_label: "WEST COAST MODEL V1",
+      app_title: "CaliSurf Light",
+      refresh_prefix: "model refresh:",
+      install_label: "Install app",
+      search_placeholder: "Search surf spots…"
+    },
+    typography: {
+      family: "Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      title_weight: 800,
+      body_weight: 600,
+      spot_name_weight: 800,
+      spot_meta_weight: 600,
+      letter_spacing: 0,
+      title_color: "#ffffff",
+      label_color: "#8edceb",
+      spot_name_color: "#ffffff",
+      spot_meta_color: "#a6bfcc"
     },
     marker_size: 7,
     marker_color_mode: "rating",
@@ -23,6 +42,16 @@
     wind_layer_enabled: true,
     wind_layer_opacity: 0.86,
     wind_particle_density: 1.05,
+    wind_particle_size: 1.0,
+    wind_particle_length: 1.0,
+    wind_particle_speed: 1.0,
+    wind_particle_shape: "line",
+    map_tint_opacity: 0.18,
+    wave_arrow_size: 1.0,
+    wave_arrow_color: "#ecffff",
+    wave_arrow_opacity: 0.96,
+    wave_arrow_stroke: 2.6,
+    wave_nearshore_overlap: 0.018,
     auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
@@ -68,6 +97,7 @@
     markerLayer: null,
     waveLayer: null,
     windLayer: null,
+    mapTintLayer: null,
     windParticles: [],
     windAnchorCache: null,
     waveRasterCache: null,
@@ -118,7 +148,13 @@
     } catch (_) {}
     try {
       const fromAdmin = JSON.parse(localStorage.getItem("surfAppAdminConfig") || "null");
-      if (fromAdmin) config = mergeDeep(config, fromAdmin);
+      // Browser-only fallback settings from old admin builds must never disable
+      // a real Supabase connection. They may still be useful when Supabase is
+      // absent, but once site_config has a public Supabase URL/key, the database
+      // is the source of truth for aesthetics/spots.
+      if (fromAdmin && !(config.supabase?.enabled && config.supabase?.url && config.supabase?.anon_key)) {
+        config = mergeDeep(config, fromAdmin);
+      }
     } catch (_) {}
     state.config = config;
     state.region = config.default_region || "san-diego";
@@ -137,7 +173,33 @@
     root.style.setProperty("--edge-buffer", `${Number(config.edge_buffer ?? 22)}px`);
     root.style.setProperty("--mobile-detail-scale", Number(config.mobile_detail_scale ?? 0.92));
     root.style.setProperty("--wind-layer-opacity", Number(config.wind_layer_opacity ?? 0.70));
+    root.style.setProperty("--map-tint-opacity", String(Math.max(0, Math.min(1, Number(config.map_tint_opacity ?? 0.18)))));
+    const ty = config.typography || {};
+    root.style.setProperty("--font-family-app", ty.family || DEFAULT_CONFIG.typography.family);
+    root.style.setProperty("--font-title-weight", Number(ty.title_weight ?? 800));
+    root.style.setProperty("--font-body-weight", Number(ty.body_weight ?? 600));
+    root.style.setProperty("--font-spot-name-weight", Number(ty.spot_name_weight ?? 800));
+    root.style.setProperty("--font-spot-meta-weight", Number(ty.spot_meta_weight ?? 600));
+    root.style.setProperty("--letter-spacing-app", `${Number(ty.letter_spacing ?? 0)}em`);
+    root.style.setProperty("--title-color", ty.title_color || "#ffffff");
+    root.style.setProperty("--label-color", ty.label_color || "#8edceb");
+    root.style.setProperty("--spot-name-color", ty.spot_name_color || "#ffffff");
+    root.style.setProperty("--spot-meta-color", ty.spot_meta_color || "#a6bfcc");
     document.body.classList.toggle("compact-layout", config.layout === "compact");
+    updateConfiguredText();
+    state.mapTintLayer?.redraw?.();
+  }
+
+  function updateConfiguredText() {
+    const t = state.config.text || {};
+    const eyebrow = document.querySelector(".brand-block .eyebrow");
+    const title = document.querySelector(".brand-block h1");
+    const install = $("installButton");
+    const search = $("spotSearch");
+    if (eyebrow) { eyebrow.textContent = t.model_label ?? DEFAULT_CONFIG.text.model_label; eyebrow.hidden = !String(eyebrow.textContent || "").trim(); }
+    if (title) { title.textContent = t.app_title ?? DEFAULT_CONFIG.text.app_title; title.hidden = !String(title.textContent || "").trim(); }
+    if (install) install.textContent = t.install_label || DEFAULT_CONFIG.text.install_label;
+    if (search) search.placeholder = t.search_placeholder || DEFAULT_CONFIG.text.search_placeholder;
   }
 
   function allSpots() {
@@ -231,6 +293,7 @@
     state.map = L.map("map", { zoomControl: true, scrollWheelZoom: true, attributionControl: false, preferCanvas: true }).setView(def.center, def.zoom);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 13 }).addTo(state.map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 13 }).addTo(state.map);
+    initMapTintLayer();
     state.markerLayer = L.layerGroup().addTo(state.map);
     initWaveLayer();
     initWindLayer();
@@ -368,6 +431,42 @@
     state.map.setView(def.center, def.zoom, { animate: true });
   }
 
+  function initMapTintLayer() {
+    if (!state.map || !window.L) return;
+    state.map.createPane("mapTintPane");
+    const pane = state.map.getPane("mapTintPane");
+    pane.style.zIndex = 350;
+    pane.style.pointerEvents = "none";
+    const TintLayer = L.Layer.extend({
+      onAdd(map) {
+        this._map = map;
+        this._el = L.DomUtil.create("div", "map-tint-layer leaflet-layer");
+        pane.appendChild(this._el);
+        map.on("move zoom resize", this._reset, this);
+        this._reset();
+      },
+      onRemove(map) {
+        map.off("move zoom resize", this._reset, this);
+        if (this._el?.parentNode) this._el.parentNode.removeChild(this._el);
+      },
+      _reset() {
+        const size = this._map.getSize();
+        const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+        L.DomUtil.setPosition(this._el, topLeft);
+        this._el.style.width = `${size.x}px`;
+        this._el.style.height = `${size.y}px`;
+        this.redraw();
+      },
+      redraw() {
+        if (!this._el) return;
+        const opacity = Math.max(0, Math.min(1, Number(state.config.map_tint_opacity ?? 0.18)));
+        this._el.style.background = `rgba(0, 10, 18, ${opacity})`;
+      }
+    });
+    state.mapTintLayer = new TintLayer();
+    state.mapTintLayer.addTo(state.map);
+  }
+
   function initWaveLayer() {
     if (!state.map || !window.L) return;
     const WaveCanvasLayer = L.Layer.extend({
@@ -408,7 +507,7 @@
     const frame = currentWaveFrame();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
-    const opacity = Math.max(0, Math.min(0.78, Number(state.config.wave_layer_opacity ?? 0.26)));
+    const opacity = Math.max(0, Math.min(0.90, Number(state.config.wave_layer_opacity ?? 0.26)));
     const phase = (performance.now() / 1000) % 1000;
 
     // V2.1: render the wave layer as a continuous sampled raster, not point blobs.
@@ -442,11 +541,12 @@
     for (let y = step * 0.55; y < canvas.height; y += step) {
       for (let x = step * 0.55; x < canvas.width; x += step) {
         const ll = map.containerPointToLatLng([x, y]);
-        if (!isPacificWater(ll.lat, ll.lng, 3.9, 0.04)) continue;
+        if (!isPacificWater(ll.lat, ll.lng, 3.9, Number(state.config.wave_nearshore_overlap ?? 0.04))) continue;
         const wave = waveValueAt(frame, ll.lat, ll.lng);
         if (!wave || wave.direction_deg == null) continue;
         // Arrows stay pinned to their grid root; only direction/size change with the frame.
-        drawWaveArrow(ctx, x, y, wave.direction_deg, Math.max(15, Math.min(26, 10 + Number(wave.height_ft || 0) * 2.5)));
+        const mult = Math.max(0.45, Math.min(2.4, Number(state.config.wave_arrow_size ?? 1.0)));
+        drawWaveArrow(ctx, x, y, wave.direction_deg, Math.max(15, Math.min(30, 10 + Number(wave.height_ft || 0) * 2.5)) * mult);
       }
     }
     ctx.restore();
@@ -467,7 +567,7 @@
     for (let y = 0; y < canvas.height; y += cell) {
       for (let x = 0; x < canvas.width; x += cell) {
         const ll = map.containerPointToLatLng([x + cell * .5, y + cell * .5]);
-        if (!isPacificWater(ll.lat, ll.lng, 4.2, 0.018)) continue;
+        if (!isPacificWater(ll.lat, ll.lng, 4.2, Number(state.config.wave_nearshore_overlap ?? 0.018))) continue;
         const wave = waveValueAt(frame, ll.lat, ll.lng);
         if (!wave) continue;
         rctx.fillStyle = hexToRgba(waveColor(wave.height_ft), opacity);
@@ -486,7 +586,7 @@
       bctx.drawImage(out, 0, 0);
       bctx.filter = "none";
       bctx.globalCompositeOperation = "destination-in";
-      drawOceanMask(bctx, blur.width, blur.height, map, scaleX, scaleY, 0.010);
+      drawOceanMask(bctx, blur.width, blur.height, map, scaleX, scaleY, Number(state.config.wave_nearshore_overlap ?? 0.010));
       bctx.globalCompositeOperation = "source-over";
       return blur;
     }
@@ -575,9 +675,12 @@
     const x2 = x + Math.cos(rad) * len;
     const y2 = y + Math.sin(rad) * len;
     const head = Math.max(5.5, len * .28);
+    const arrowColor = state.config.wave_arrow_color || "#ecffff";
+    const arrowOpacity = Math.max(0.05, Math.min(1, Number(state.config.wave_arrow_opacity ?? .96)));
+    const stroke = Math.max(.5, Math.min(7, Number(state.config.wave_arrow_stroke ?? 2.6)));
 
     ctx.save();
-    ctx.lineWidth += 2.8;
+    ctx.lineWidth += stroke;
     ctx.strokeStyle = "rgba(3,12,18,.86)";
     ctx.fillStyle = "rgba(3,12,18,.86)";
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
@@ -589,8 +692,10 @@
     ctx.restore();
 
     ctx.save();
-    ctx.strokeStyle = "rgba(236,255,255,.96)";
-    ctx.fillStyle = "rgba(236,255,255,.96)";
+    ctx.globalAlpha = arrowOpacity;
+    ctx.lineWidth = Math.max(1, ctx.lineWidth - 0.4);
+    ctx.strokeStyle = arrowColor;
+    ctx.fillStyle = arrowColor;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(x2, y2);
@@ -838,10 +943,13 @@
     ctx.restore();
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
     resetWindParticles();
-    const opacity = Math.max(.12, Math.min(.90, Number(state.config.wind_layer_opacity ?? .62)));
+    const opacity = Math.max(.08, Math.min(.96, Number(state.config.wind_layer_opacity ?? .62))) * Math.max(.1, Math.min(1, Number(state.config.wind_particle_opacity ?? 1)));
+    const lineSize = Math.max(.25, Math.min(4, Number(state.config.wind_particle_size ?? 1.0)));
+    const lineLength = Math.max(.35, Math.min(4, Number(state.config.wind_particle_length ?? 1.0)));
+    const speedMult = Math.max(.15, Math.min(4, Number(state.config.wind_particle_speed ?? 1.0)));
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.lineWidth = window.innerWidth < 760 ? 0.95 : 0.85;
+    ctx.lineWidth = (window.innerWidth < 760 ? 0.95 : 0.85) * lineSize;
     ctx.lineCap = "round";
     ctx.shadowColor = "rgba(0,0,0,.82)";
     ctx.shadowBlur = 4;
@@ -854,11 +962,14 @@
       const speed = Math.max(1, Number(wind.speed_kt || 4));
       const motionDeg = (Number(wind.direction_deg) + 180) % 360;
       const rad = (motionDeg - 90) * Math.PI / 180;
-      const step = Math.max(0.20, Math.min(1.65, speed * 0.045 * (window.innerWidth < 760 ? .82 : .95)));
+      const step = Math.max(0.16, Math.min(1.75, speed * 0.045 * (window.innerWidth < 760 ? .82 : .95))) * speedMult;
       const nx = p.x + Math.cos(rad) * step;
       const ny = p.y + Math.sin(rad) * step;
-      ctx.strokeStyle = hexToRgba(windSpeedColor(speed), 0.86);
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
+      const tail = Math.max(1.6, Math.min(16, (2.6 + speed * .32) * lineLength));
+      const sx = p.x - Math.cos(rad) * tail;
+      const sy = p.y - Math.sin(rad) * tail;
+      ctx.strokeStyle = hexToRgba(windSpeedColor(speed), 0.90);
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(nx, ny); ctx.stroke();
       p.x = nx; p.y = ny;
     }
     ctx.restore();
@@ -913,7 +1024,8 @@
     tray.hidden = false;
     document.querySelector(".side-panel")?.classList.add("has-pins");
     tray.innerHTML = `<div class="pinned-label">Pinned</div><div class="pinned-strip">${pins.map(spot => {
-      const height = forecastFor(spot.id)?.surf_height_ft?.human || "—";
+      const fc = forecastFor(spot.id);
+      const height = fc ? (dailyRangeFor(fc) || fc?.surf_height_ft?.human || "—") : "—";
       const dotColor = markerColorFor(spot.id);
       const sitePinned = new Set(state.config.pinned_spot_ids || []).has(spot.id);
       return `<div class="pinned-card ${spot.id === state.selectedId ? "is-active" : ""}" role="button" tabindex="0" data-id="${escapeHtml(spot.id)}" title="${escapeHtml(spot.name)}">
@@ -935,7 +1047,7 @@
     const spots = filteredSpots();
     list.innerHTML = spots.map(spot => {
       const fc = forecastFor(spot.id);
-      const height = fc?.surf_height_ft?.human || "—";
+      const height = fc ? (dailyRangeFor(fc) || fc?.surf_height_ft?.human || "—") : "—";
       const rating = fc?.rating || "loading";
       const dotColor = markerColorFor(spot.id);
       const pinned = isPinned(spot.id);
@@ -1375,7 +1487,7 @@
       state.windGrid = windGrid;
       const statusEl = $("globalStatus");
       if (statusEl) { statusEl.textContent = ""; statusEl.hidden = true; }
-      $("modelRefresh").textContent = `model refresh: ${fmtDateTime(latest.generated_at)}`;
+      $("modelRefresh").textContent = `${state.config.text?.refresh_prefix || "model refresh:"} ${fmtDateTime(latest.generated_at)}`;
       $("waveLayerToggle").checked = state.config.wave_layer_enabled === true;
       if ($("windLayerToggle")) $("windLayerToggle").checked = state.config.wind_layer_enabled !== false;
       $("markerColorMode").value = state.config.marker_color_mode || "rating";

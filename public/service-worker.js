@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'calisurf-light-pwa-v24-gradient-sticky-2026-06-05';
+const CACHE_VERSION = 'calisurf-light-pwa-v25-admin-wavewind-2026-06-06';
 const APP_SHELL = [
   './',
   './index.html',

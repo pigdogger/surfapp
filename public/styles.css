@@ -18,6 +18,17 @@
   --edge-buffer: 16px;
   --mobile-detail-scale: .54;
   --wind-layer-opacity: .62;
+  --map-tint-opacity: .18;
+  --font-family-app: Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-title-weight: 800;
+  --font-body-weight: 600;
+  --font-spot-name-weight: 800;
+  --font-spot-meta-weight: 600;
+  --letter-spacing-app: 0em;
+  --title-color: #ffffff;
+  --label-color: #8edceb;
+  --spot-name-color: #ffffff;
+  --spot-meta-color: #a6bfcc;
   color-scheme: dark;
 }
 
@@ -26,8 +37,10 @@ html, body { min-height: 100%; margin: 0; overflow-x: hidden; scroll-behavior: a
 body {
   background: radial-gradient(circle at 25% 10%, rgba(27,184,212,.18), transparent 28%), var(--bg);
   color: white;
-  font-family: Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-family-app);
   font-size: calc(15px * var(--base-font-scale));
+  font-weight: var(--font-body-weight);
+  letter-spacing: var(--letter-spacing-app);
 }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
@@ -51,13 +64,13 @@ a { color: inherit; }
 .top-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
 .eyebrow {
   margin: 0 0 4px;
-  color: #8edceb;
+  color: var(--label-color);
   text-transform: uppercase;
   letter-spacing: .16em;
   font-size: .74rem;
   font-weight: 800;
 }
-h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weight: 800; letter-spacing: -.04em; }
+h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weight: var(--font-title-weight); letter-spacing: calc(-.04em + var(--letter-spacing-app)); color: var(--title-color); }
 .refresh-line { margin: 7px 0 0; color: #d8f7ff; font-size: .92rem; font-weight: 700; }
 .status-pill, .install-btn {
   border: 1px solid var(--line);
@@ -145,8 +158,15 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   font-weight: 700;
 }
 .map { flex: 1; min-height: 520px; background: #06121b; }
-.leaflet-container { background: #06121b; font-family: Raleway, sans-serif; }
+.leaflet-container { background: #06121b; font-family: var(--font-family-app); }
 .leaflet-control-attribution { display: none !important; }
+
+.map-tint-layer {
+  pointer-events: none;
+  background: rgba(0, 10, 18, var(--map-tint-opacity));
+  mix-blend-mode: multiply;
+}
+
 .wave-grid-canvas, .wind-grid-canvas { pointer-events: none; }
 .wave-grid-canvas { mix-blend-mode: normal; }
 .wind-grid-canvas { opacity: var(--wind-layer-opacity); }
@@ -195,8 +215,8 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   color: white;
 }
 .spot-row:hover, .spot-row.is-active { background: rgba(27,184,212,.22); outline: 1px solid rgba(142,220,235,.22); }
-.spot-row strong { display: block; line-height: 1.08; font-weight: 800; }
-.spot-row small { display: block; margin-top: 3px; color: #a6bfcc; font-weight: 700; }
+.spot-row strong { display: block; line-height: 1.08; font-weight: var(--font-spot-name-weight); color: var(--spot-name-color); }
+.spot-row small { display: block; margin-top: 3px; color: var(--spot-meta-color); font-weight: var(--font-spot-meta-weight); }
 .spot-row-main { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .spot-row-main > span { min-width: 0; }
 .spot-color-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot-color, var(--accent-2)); flex: 0 0 9px; display: inline-block; }
@@ -443,7 +463,7 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   .forecast-panel .info-card { min-width: 0; }
   .day-hour { grid-template-columns: 38px minmax(62px,1fr) 40px; grid-template-areas: "time surf wind"; }
   .day-hour strong { white-space: nowrap; }
-  .spot-row strong { font-weight: 800; }
+  .spot-row strong { font-weight: var(--font-spot-name-weight); }
   .spot-row small { font-weight: 600; }
 }
 
@@ -540,8 +560,8 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   .search-row { padding: 9px; }
   .search-row input { padding: 9px 10px; }
   .spot-row { padding: 8px 9px; gap: 7px; }
-  .spot-row strong { font-size: .82rem; font-weight: 700; letter-spacing: -.02em; }
-  .spot-row small { font-size: .66rem; font-weight: 500; }
+  .spot-row strong { font-size: .82rem; font-weight: var(--font-spot-name-weight); letter-spacing: calc(-.02em + var(--letter-spacing-app)); }
+  .spot-row small { font-size: .66rem; font-weight: var(--font-spot-meta-weight); }
   .height-badge { padding: 5px 7px; font-size: .72rem; font-weight: 700; }
   .pin-toggle { width: 26px; height: 26px; font-size: .82rem; }
   .forecast-panel { font-size: .70rem; padding: 8px; border-radius: 8px; }

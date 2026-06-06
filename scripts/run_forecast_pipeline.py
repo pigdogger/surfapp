@@ -860,6 +860,30 @@ def confidence_from_status(statuses: Iterable[str]) -> float:
     return round(clamp(score, 0.15, 0.96), 2)
 
 
+def day_range_from_hourly(rows: Sequence[Dict[str, Any]], generated_at: dt.datetime) -> Tuple[Optional[float], Optional[float]]:
+    """Daily visible range from 6 AM through 7 PM Pacific, matching the app card/list."""
+    if not rows:
+        return None, None
+    target_date = generated_at.astimezone(PACIFIC).date()
+    usable: List[Dict[str, Any]] = []
+    for r in rows:
+        try:
+            t = parse_iso_utc(str(r.get("time"))).astimezone(PACIFIC)
+        except Exception:
+            continue
+        if t.date() == target_date and 6 <= t.hour <= 19:
+            usable.append(r)
+    if not usable:
+        usable = list(rows[:8])
+    lows = [safe_float(r.get("surf_min_ft")) for r in usable]
+    highs = [safe_float(r.get("surf_max_ft")) for r in usable]
+    lows = [v for v in lows if v is not None]
+    highs = [v for v in highs if v is not None]
+    if not lows or not highs:
+        return None, None
+    return round(min(lows), 1), round(max(highs), 1)
+
+
 def best_window_from_hourly(hourly: Sequence[Dict[str, Any]]) -> str:
     if not hourly:
         return "Dawn to mid-morning"
@@ -956,8 +980,11 @@ def build_forecast_for_spot(spot: Dict[str, Any], generated_at: dt.datetime) -> 
             "tide_trend": tide_dir,
         })
 
-    low = max(0.0, math.floor((current_surf_mid * 0.78) * 2) / 2)
-    high = max(low + 0.5, math.ceil((current_surf_mid * 1.25) * 2) / 2)
+    current_low = max(0.0, math.floor((current_surf_mid * 0.78) * 2) / 2)
+    current_high = max(current_low + 0.5, math.ceil((current_surf_mid * 1.25) * 2) / 2)
+    day_low, day_high = day_range_from_hourly(hourly, generated_at)
+    low = day_low if day_low is not None else current_low
+    high = day_high if day_high is not None else current_high
 
     secondary = marine_secondary_from_row(marine_current) if marine_current else None
     if not secondary and obs_wave.get("secondary_height_ft") and obs_wave.get("secondary_period_s"):
@@ -1098,9 +1125,10 @@ def california_wave_grid_points() -> List[Dict[str, float]]:
     pts: List[Dict[str, float]] = []
     for lat in frange(30.5, 42.5, 0.35):
         coast = approx_coast_lon(lat)
-        # Wave field should live offshore only, never inland. The browser also
-        # masks land at draw time.
-        for lon in frange(coast - 3.7, coast - 0.08, 0.35):
+        # Wave field intentionally overlaps the shoreline slightly; the browser
+        # clips the rendered raster to the coastline curve so the final color hugs
+        # shore without visibly painting inland.
+        for lon in frange(coast - 3.7, coast + 0.01, 0.30):
             pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
     return pts
 
@@ -1125,7 +1153,7 @@ def synthetic_wave_grid(generated_at: dt.datetime, status: str = "wave_grid:fall
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v2.3",
+        "model": "calisurf-wave-grid-v2.5",
         "source": status,
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
@@ -1197,8 +1225,8 @@ def fetch_wave_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v2.3",
-        "source": "Open-Meteo Marine API best-match wave model grid; drawn client-side as optional semitransparent offshore wave-height colorization",
+        "model": "calisurf-wave-grid-v2.5",
+        "source": "NOAA/NCEP WaveWatch-style marine model gateway via Open-Meteo, with WaveWatch/NOMADS-ready pipeline hooks; drawn client-side as optional semitransparent coastline-clipped wave-height colorization",
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
@@ -1418,7 +1446,7 @@ def main() -> None:
             "wind_forecast": "Open-Meteo Weather Forecast API best-match 10 m wind guidance with NDBC observation anchoring; direct HRRR/RAP/GFS GRIB ingest can be enabled later via dedicated NOAA fetchers",
             "tides": "NOAA CO-OPS predictions",
             "bathymetry": "empirical California shelf/canyon/reef exposure coefficients in spots.json; NCEI CRM/ETOPO raster sampler remains the next precision upgrade",
-            "wave_grid_layer": "public/data/wave_grid_24h.json generated from Open-Meteo Marine API wave_height/wave_direction over a reduced California offshore grid",
+            "wave_grid_layer": "public/data/wave_grid_24h.json generated from a WaveWatch-style marine model gateway and prepared for direct NOAA/NOMADS WaveWatch ingestion",
             "wind_grid_layer": "public/data/wind_grid_latest.json generated from Open-Meteo 10 m wind grid for Windy-style particle rendering",
         },
         "wind_grid": {
