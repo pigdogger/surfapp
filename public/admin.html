@@ -58,12 +58,15 @@
           <label>Spot fair color <input id="spotFairColor" type="color" value="#f4c542" /></label>
           <label>Spot good color <input id="spotGoodColor" type="color" value="#1ecb78" /></label>
           <label>Wind low color <input id="windLowColor" type="color" value="#8ee8ff" /></label>
+          <label>Wind mid color <input id="windMidColor" type="color" value="#f4c542" /></label>
           <label>Wind high color <input id="windHighColor" type="color" value="#ef4444" /></label>
           <label>Wind gradient min kt <input id="windMinSpeed" type="number" min="0" max="30" step="1" value="0" /></label>
           <label>Wind gradient max kt <input id="windMaxSpeed" type="number" min="5" max="60" step="1" value="24" /></label>
           <label>Wave low color <input id="waveLowColor" type="color" value="#1eb6d0" /></label>
+          <label>Wave mid color <input id="waveMidColor" type="color" value="#22c55e" /></label>
           <label>Wave high color <input id="waveHighColor" type="color" value="#f97316" /></label>
-          <label>Typography scale <input id="fontScale" type="range" min="0.85" max="1.25" step="0.05" value="1" /></label>
+          <label>Map tint / shading <input id="mapTintOpacity" type="range" min="0" max="1" step="0.03" value="0.18" /></label>
+          <label>Typography scale <input id="fontScale" type="range" min="0.75" max="1.25" step="0.03" value="1" /></label>
           <label>Window corner radius <input id="cornerRadius" type="range" min="2" max="28" value="8" /></label>
           <label>Mobile edge buffer <input id="edgeBuffer" type="range" min="8" max="40" value="22" /></label>
           <label>Mobile detail scale <input id="mobileDetailScale" type="range" min="0.55" max="1.05" step="0.03" value="0.64" /></label>
@@ -85,6 +88,31 @@
             </select>
           </label>
         </div>
+        <h3>Editable text + typography</h3>
+        <div class="form-grid">
+          <label>Title card: small model label <input id="modelLabelText" placeholder="WEST COAST MODEL V1" /></label>
+          <label>Title card: app title <input id="appTitleText" placeholder="CaliSurf Light" /></label>
+          <label>Refresh label prefix <input id="refreshPrefixText" placeholder="model refresh:" /></label>
+          <label>Surf spot search placeholder <input id="searchPlaceholderText" placeholder="Search surf spots…" /></label>
+          <label>Font family
+            <select id="fontFamily">
+              <option value="Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Raleway</option>
+              <option value="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Inter / modern</option>
+              <option value="Avenir Next, Avenir, ui-sans-serif, system-ui, sans-serif">Avenir-style</option>
+              <option value="Helvetica Neue, Arial, ui-sans-serif, sans-serif">Helvetica Neue</option>
+              <option value="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">System UI</option>
+            </select>
+          </label>
+          <label>Title font weight <input id="titleWeight" type="range" min="300" max="900" step="50" value="800" /></label>
+          <label>Body font weight <input id="bodyWeight" type="range" min="300" max="800" step="50" value="600" /></label>
+          <label>Surf spots: name font weight <input id="spotNameWeight" type="range" min="300" max="900" step="50" value="800" /></label>
+          <label>Surf spots: under-name detail weight <input id="spotMetaWeight" type="range" min="300" max="800" step="50" value="600" /></label>
+          <label>Kerning / letter spacing <input id="letterSpacing" type="range" min="-0.06" max="0.16" step="0.01" value="0" /></label>
+          <label>Title color <input id="titleColor" type="color" value="#ffffff" /></label>
+          <label>Small label color <input id="labelColor" type="color" value="#8edceb" /></label>
+          <label>Surf spots: name color <input id="spotNameColor" type="color" value="#ffffff" /></label>
+          <label>Surf spots: under-name color <input id="spotMetaColor" type="color" value="#a6bfcc" /></label>
+        </div>
         <h3>Visible cards / features</h3>
         <div class="form-grid compact-checks">
           <label><input id="cardSwell" type="checkbox" checked /> Swell cards</label>
@@ -104,6 +132,18 @@
           <label>Wave height layer opacity <input id="waveLayerOpacity" type="range" min="0.1" max="0.75" step="0.05" value="0.44" /></label>
           <label>Wind layer opacity <input id="windLayerOpacity" type="range" min="0.15" max="0.95" step="0.05" value="0.7" /></label>
           <label>Wind particle density <input id="windParticleDensity" type="range" min="0.5" max="2.5" step="0.1" value="1" /></label>
+          <label>Wind line size <input id="windParticleSize" type="range" min="0.25" max="4" step="0.05" value="1" /></label>
+          <label>Wind line length <input id="windParticleLength" type="range" min="0.35" max="4" step="0.05" value="1" /></label>
+          <label>Wind line speed <input id="windParticleSpeed" type="range" min="0.15" max="4" step="0.05" value="1" /></label>
+          <label>Wind line opacity <input id="windParticleOpacity" type="range" min="0.1" max="1" step="0.05" value="1" /></label>
+          <label>Wind line shape
+            <select id="windParticleShape"><option value="line">Line</option><option value="dash">Dash</option><option value="spark">Spark</option></select>
+          </label>
+          <label>Wave arrow size <input id="waveArrowSize" type="range" min="0.45" max="2.4" step="0.05" value="1" /></label>
+          <label>Wave arrow color <input id="waveArrowColor" type="color" value="#ecffff" /></label>
+          <label>Wave arrow opacity <input id="waveArrowOpacity" type="range" min="0.05" max="1" step="0.05" value="0.96" /></label>
+          <label>Wave arrow outline/stroke <input id="waveArrowStroke" type="range" min="0.5" max="7" step="0.1" value="2.6" /></label>
+          <label>Wave coastline overlap <input id="waveNearshoreOverlap" type="range" min="0" max="0.08" step="0.002" value="0.018" /></label>
         </div>
         <div class="button-row">
           <button class="primary-btn" id="saveConfig">Save settings</button>
