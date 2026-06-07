@@ -1,4 +1,4 @@
-/* CaliSurf Light admin console · Supabase-direct · v2.5 typography, wind/wave, map tint controls. */
+/* CaliSurf Light admin console · Supabase-direct · v2.6 hourly wind/map timeline controls. */
 (() => {
   const FALLBACK_ADMIN_EMAIL = "admin@calisurf.com";
   const FALLBACK_ADMIN_PASSWORD = "bonitaindo26";
@@ -12,29 +12,29 @@
       wave_height: { min: 0, max: 18, low: "#1eb6d0", mid: "#22c55e", high: "#f97316" }
     },
     text: { model_label: "WEST COAST MODEL V1", app_title: "CaliSurf Light", refresh_prefix: "model refresh:", install_label: "Install app", search_placeholder: "Search surf spots…" },
-    typography: { family: "Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", title_weight: 800, body_weight: 600, spot_name_weight: 800, spot_meta_weight: 600, letter_spacing: 0, title_color: "#ffffff", label_color: "#8edceb", spot_name_color: "#ffffff", spot_meta_color: "#a6bfcc" },
-    marker_size: 7,
+    typography: { family: "Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", title_weight: 300, body_weight: 500, spot_name_weight: 550, spot_meta_weight: 600, letter_spacing: 0.02, title_color: "#ffffff", label_color: "#8edceb", spot_name_color: "#ffffff", spot_meta_color: "#a6bfcc" },
+    marker_size: 6,
     marker_color_mode: "rating",
-    typography_scale: 0.86,
+    typography_scale: 0.81,
     corner_radius: 8,
-    edge_buffer: 14,
-    mobile_detail_scale: 0.54,
+    edge_buffer: 39,
+    mobile_detail_scale: 0.55,
     wave_layer_enabled: false,
-    wave_layer_opacity: 0.18,
-    show_wave_direction_arrows: true,
+    wave_layer_opacity: 0.1,
+    show_wave_direction_arrows: false,
     wind_layer_enabled: true,
-    wind_layer_opacity: 0.62,
-    wind_particle_density: 1.05,
+    wind_layer_opacity: 0.75,
+    wind_particle_density: 2.5,
     wind_particle_size: 1.0,
-    wind_particle_length: 1.0,
-    wind_particle_speed: 1.0,
+    wind_particle_length: 2.15,
+    wind_particle_speed: 2.5,
     wind_particle_opacity: 1.0,
-    wind_particle_shape: "line",
-    map_tint_opacity: 0.18,
-    wave_arrow_size: 1.0,
-    wave_arrow_color: "#ecffff",
-    wave_arrow_opacity: 0.96,
-    wave_arrow_stroke: 2.6,
+    wind_particle_shape: "spark",
+    map_tint_opacity: 0.36,
+    wave_arrow_size: 1.7,
+    wave_arrow_color: "#4268ff",
+    wave_arrow_opacity: 0.2,
+    wave_arrow_stroke: 0.5,
     wave_nearshore_overlap: 0.018,
     auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
@@ -47,7 +47,7 @@
     hidden_spot_ids: [],
     pinned_spot_ids: [],
     added_spots: [],
-    supabase: { enabled: false, url: "", anon_key: "" }
+    supabase: { enabled: true, url: "https://hzyskrurgtwceperzcqb.supabase.co", anon_key: "sb_publishable_mBqm_4Or0NLo0pkk9toq0Q_-0nHMQpX" }, hourly_wind_enabled: true, hourly_wind_start_hour: 5, hourly_wind_end_hour: 21, hourly_wind_frame_ms: 1450, hourly_wind_arrow_min_px: 4, hourly_wind_arrow_max_px: 26, hourly_wind_density: 1.0
   };
 
   const state = { config: structuredClone(DEFAULT_CONFIG), spots: [], filter: "", supabase: null, session: null, supabaseReady: false, _loaded: false };
@@ -207,6 +207,10 @@
     if ($("windParticleSpeed")) $("windParticleSpeed").value = c.wind_particle_speed ?? 1.0;
     if ($("windParticleOpacity")) $("windParticleOpacity").value = c.wind_particle_opacity ?? 1.0;
     if ($("windParticleShape")) $("windParticleShape").value = c.wind_particle_shape || "line";
+    if ($("hourlyWindFrameMs")) $("hourlyWindFrameMs").value = c.hourly_wind_frame_ms ?? 1450;
+    if ($("hourlyWindDensity")) $("hourlyWindDensity").value = c.hourly_wind_density ?? 1.0;
+    if ($("hourlyWindMinPx")) $("hourlyWindMinPx").value = c.hourly_wind_arrow_min_px ?? 4;
+    if ($("hourlyWindMaxPx")) $("hourlyWindMaxPx").value = c.hourly_wind_arrow_max_px ?? 26;
     if ($("mapTintOpacity")) $("mapTintOpacity").value = c.map_tint_opacity ?? 0.18;
     if ($("waveArrowSize")) $("waveArrowSize").value = c.wave_arrow_size ?? 1.0;
     if ($("waveArrowColor")) $("waveArrowColor").value = c.wave_arrow_color || "#ecffff";
@@ -273,6 +277,11 @@
       wind_particle_speed: Number($("windParticleSpeed")?.value ?? 1.0),
       wind_particle_opacity: Number($("windParticleOpacity")?.value ?? 1.0),
       wind_particle_shape: $("windParticleShape")?.value || "line",
+      hourly_wind_enabled: true,
+      hourly_wind_frame_ms: Number($("hourlyWindFrameMs")?.value ?? 1450),
+      hourly_wind_density: Number($("hourlyWindDensity")?.value ?? 1.0),
+      hourly_wind_arrow_min_px: Number($("hourlyWindMinPx")?.value ?? 4),
+      hourly_wind_arrow_max_px: Number($("hourlyWindMaxPx")?.value ?? 26),
       map_tint_opacity: Number($("mapTintOpacity")?.value ?? 0.18),
       wave_arrow_size: Number($("waveArrowSize")?.value ?? 1.0),
       wave_arrow_color: $("waveArrowColor")?.value || "#ecffff",
@@ -456,7 +465,7 @@
     $("loginButton").addEventListener("click", attemptLogin);
     $("loginPassword").addEventListener("keydown", e => { if (e.key === "Enter") attemptLogin(); });
     $("logoutButton").addEventListener("click", logout);
-    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "spotPoorColor", "spotFairColor", "spotGoodColor", "windLowColor", "windMidColor", "windHighColor", "windMinSpeed", "windMaxSpeed", "waveLowColor", "waveMidColor", "waveHighColor", "modelLabelText", "appTitleText", "refreshPrefixText", "searchPlaceholderText", "fontFamily", "titleWeight", "bodyWeight", "spotNameWeight", "spotMetaWeight", "letterSpacing", "titleColor", "labelColor", "spotNameColor", "spotMetaColor", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "autoCenterNearest", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "windParticleSize", "windParticleLength", "windParticleSpeed", "windParticleOpacity", "windParticleShape", "mapTintOpacity", "waveArrowSize", "waveArrowColor", "waveArrowOpacity", "waveArrowStroke", "waveNearshoreOverlap", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
+    ["bgColor", "panelColor", "accentColor", "accent2Color", "markerSize", "markerColorMode", "spotPoorColor", "spotFairColor", "spotGoodColor", "windLowColor", "windMidColor", "windHighColor", "windMinSpeed", "windMaxSpeed", "waveLowColor", "waveMidColor", "waveHighColor", "modelLabelText", "appTitleText", "refreshPrefixText", "searchPlaceholderText", "fontFamily", "titleWeight", "bodyWeight", "spotNameWeight", "spotMetaWeight", "letterSpacing", "titleColor", "labelColor", "spotNameColor", "spotMetaColor", "fontScale", "cornerRadius", "edgeBuffer", "mobileDetailScale", "autoCenterNearest", "waveLayerEnabled", "waveLayerOpacity", "showWaveDirectionArrows", "windLayerEnabled", "windLayerOpacity", "windParticleDensity", "windParticleSize", "windParticleLength", "windParticleSpeed", "windParticleOpacity", "windParticleShape", "hourlyWindFrameMs", "hourlyWindDensity", "hourlyWindMinPx", "hourlyWindMaxPx", "mapTintOpacity", "waveArrowSize", "waveArrowColor", "waveArrowOpacity", "waveArrowStroke", "waveNearshoreOverlap", "defaultRegion", "layoutMode", "cardSwell", "cardWind", "cardTide", "cardSun", "cardConfidence", "cardModel", "cardHourly", "cardFiveDay", "cardWarnings", "showSwellArrows", "showWindArrows"].forEach(id => { $(id)?.addEventListener("input", readConfigFromForm); $(id)?.addEventListener("change", readConfigFromForm); });
     $("saveConfig").addEventListener("click", save);
     $("downloadConfig").addEventListener("click", () => { readConfigFromForm(); download("site_config.json", JSON.stringify(state.config, null, 2)); });
     $("resetConfig").addEventListener("click", () => { state.config = structuredClone(DEFAULT_CONFIG); localStorage.removeItem("surfAppAdminConfig"); applyConfigToForm(); renderSpotList(); });

@@ -1,4 +1,4 @@
-/* CaliSurf Light public app · west coast model V2.5 · admin typography, map tint, WaveWatch-ready layers · no build step. */
+/* CaliSurf Light public app · west coast model V2.6 · hourly wind arrows, native settings, desktop edge layout · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
@@ -17,45 +17,52 @@
     },
     typography: {
       family: "Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      title_weight: 800,
-      body_weight: 600,
-      spot_name_weight: 800,
+      title_weight: 300,
+      body_weight: 500,
+      spot_name_weight: 550,
       spot_meta_weight: 600,
-      letter_spacing: 0,
+      letter_spacing: 0.02,
       title_color: "#ffffff",
       label_color: "#8edceb",
       spot_name_color: "#ffffff",
       spot_meta_color: "#a6bfcc"
     },
-    marker_size: 7,
+    marker_size: 6,
     marker_color_mode: "rating",
-    typography_scale: 0.88,
+    typography_scale: 0.81,
     corner_radius: 8,
-    edge_buffer: 16,
-    mobile_detail_scale: 0.64,
+    edge_buffer: 39,
+    mobile_detail_scale: 0.55,
     layout: "full",
     default_region: "san-diego",
     wave_layer_enabled: false,
-    wave_layer_opacity: 0.18,
+    wave_layer_opacity: 0.1,
     wave_animation_ms: 1150,
-    show_wave_direction_arrows: true,
+    show_wave_direction_arrows: false,
     wind_layer_enabled: true,
-    wind_layer_opacity: 0.86,
-    wind_particle_density: 1.05,
+    wind_layer_opacity: 0.75,
+    wind_particle_density: 2.5,
     wind_particle_size: 1.0,
-    wind_particle_length: 1.0,
-    wind_particle_speed: 1.0,
-    wind_particle_shape: "line",
-    map_tint_opacity: 0.18,
-    wave_arrow_size: 1.0,
-    wave_arrow_color: "#ecffff",
-    wave_arrow_opacity: 0.96,
-    wave_arrow_stroke: 2.6,
+    wind_particle_length: 2.15,
+    wind_particle_speed: 2.5,
+    wind_particle_shape: "spark",
+    map_tint_opacity: 0.36,
+    wave_arrow_size: 1.7,
+    wave_arrow_color: "#4268ff",
+    wave_arrow_opacity: 0.2,
+    wave_arrow_stroke: 0.5,
     wave_nearshore_overlap: 0.018,
     auto_center_nearest_beaches: true,
     auto_scroll_selected_list: false,
     auto_scroll_region_chips: false,
-    supabase: { enabled: false, url: "", anon_key: "" },
+    supabase: { enabled: true, url: "https://hzyskrurgtwceperzcqb.supabase.co", anon_key: "sb_publishable_mBqm_4Or0NLo0pkk9toq0Q_-0nHMQpX" },
+    hourly_wind_enabled: true,
+    hourly_wind_start_hour: 5,
+    hourly_wind_end_hour: 21,
+    hourly_wind_frame_ms: 1450,
+    hourly_wind_arrow_min_px: 4,
+    hourly_wind_arrow_max_px: 26,
+    hourly_wind_density: 1.0,
     show_cards: { swell: true, wind: true, tide: true, sun: true, confidence: true, model: true, hourly: true, five_day: true, warnings: true },
     show_swell_arrows: true,
     show_wind_arrows: true,
@@ -66,9 +73,9 @@
 
   const REGION_DEFS = {
     "all": { label: "All CA", center: [36.2, -121.2], zoom: 6, match: () => true },
-    "san-diego": { label: "San Diego", center: [32.86, -117.27], zoom: 10, match: s => Number(s.lat) < 33.35 },
-    "orange-county": { label: "Orange County", center: [33.62, -117.93], zoom: 10, match: s => Number(s.lat) >= 33.35 && Number(s.lat) < 33.90 },
-    "los-angeles": { label: "Los Angeles", center: [33.98, -118.55], zoom: 9, match: s => Number(s.lat) >= 33.90 && Number(s.lat) < 34.35 },
+    "san-diego": { label: "San Diego", center: [32.92, -117.29], zoom: 11, match: s => Number(s.lat) < 33.35 },
+    "orange-county": { label: "Orange County", center: [33.61, -117.88], zoom: 11, match: s => Number(s.lat) >= 33.35 && Number(s.lat) < 33.90 },
+    "los-angeles": { label: "Los Angeles", center: [34.02, -118.52], zoom: 10, match: s => Number(s.lat) >= 33.90 && Number(s.lat) < 34.35 },
     "ventura-sb": { label: "Ventura / SB", center: [34.32, -119.25], zoom: 8, match: s => ["Ventura / Santa Barbara"].includes(s.region) || (Number(s.lat) >= 34.35 && Number(s.lat) < 35.4) },
     "central-coast": { label: "Central Coast", center: [35.45, -120.9], zoom: 8, match: s => s.region === "Central Coast" || (Number(s.lat) >= 35.4 && Number(s.lat) < 36.3) },
     "monterey-bay": { label: "Monterey Bay", center: [36.75, -121.95], zoom: 9, match: s => s.region === "Monterey Bay" || (Number(s.lat) >= 36.3 && Number(s.lat) < 37.1) },
@@ -88,6 +95,10 @@
     waveTimer: null,
     waveRaf: 0,
     windRaf: 0,
+    windTimer: null,
+    windTimelineIndex: 0,
+    windTimelineActiveIndex: 0,
+    windTimelineSlots: [],
     wavePlaying: true,
     windPlaying: true,
     selectedId: null,
@@ -138,13 +149,8 @@
     try {
       const localConfig = await fetchJson("./data", "site_config.json");
       config = mergeDeep(config, localConfig);
-      // Forecast-only GitHub Action commits use [skip netlify], so pull the raw GitHub
-      // config too. This lets Supabase URL/anon-key and aesthetic settings update
-      // without a Netlify rebuild.
-      const remoteBase = localConfig?.data_base_url || config.data_base_url;
-      if (remoteBase && !String(remoteBase).startsWith("./")) {
-        try { config = mergeDeep(config, await fetchJson(remoteBase, "site_config.json")); } catch (_) {}
-      }
+      // V2.6: site_config is treated as native boot config. Avoid a second raw-GitHub
+      // config fetch before first paint; live admin overrides are read from Supabase below.
     } catch (_) {}
     try {
       const fromAdmin = JSON.parse(localStorage.getItem("surfAppAdminConfig") || "null");
@@ -203,7 +209,7 @@
   }
 
   function allSpots() {
-    return [...state.spots, ...(state.config.added_spots || [])].sort((a, b) => Number(a.lat) - Number(b.lat));
+    return [...state.spots, ...(state.config.added_spots || [])].sort((a, b) => Number(b.lat) - Number(a.lat));
   }
 
   function activeSpots() {
@@ -421,13 +427,10 @@
 
   function moveMapToRegion(opts = {}) {
     if (!state.map) return;
-    const visible = filteredSpots();
-    if (visible.length && opts.fit !== false) {
-      const bounds = L.latLngBounds(visible.map(s => [s.lat, s.lon]));
-      state.map.fitBounds(bounds, { padding: [44, 44], maxZoom: (state.region === "all" ? 7 : 10) });
-      return;
-    }
     const def = REGION_DEFS[state.region] || REGION_DEFS["san-diego"];
+    // V2.6: use fixed region centers/zooms instead of fitting every matching spot.
+    // This keeps the initial/default view more zoomed-in and prevents the map from
+    // backing out too far when a region has a long north/south surf-spot chain.
     state.map.setView(def.center, def.zoom, { animate: true });
   }
 
@@ -935,60 +938,136 @@
 
   function drawWindLayerCanvas(ctx, canvas, map) {
     if (!ctx || !canvas || !map) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     const frame = currentWindFrame();
-    ctx.save();
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "rgba(0,0,0,.10)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
-    resetWindParticles();
-    const opacity = Math.max(.08, Math.min(.96, Number(state.config.wind_layer_opacity ?? .62))) * Math.max(.1, Math.min(1, Number(state.config.wind_particle_opacity ?? 1)));
-    const lineSize = Math.max(.25, Math.min(4, Number(state.config.wind_particle_size ?? 1.0)));
-    const lineLength = Math.max(.35, Math.min(4, Number(state.config.wind_particle_length ?? 1.0)));
-    const speedMult = Math.max(.15, Math.min(4, Number(state.config.wind_particle_speed ?? 1.0)));
+    const opacity = Math.max(.08, Math.min(1, Number(state.config.wind_layer_opacity ?? .75)));
+    const density = Math.max(.45, Math.min(2.6, Number(state.config.hourly_wind_density ?? state.config.wind_particle_density ?? 1)));
+    const spacing = (window.innerWidth < 760 ? 48 : 58) / Math.sqrt(density);
+    const minLen = Math.max(2, Math.min(15, Number(state.config.hourly_wind_arrow_min_px ?? 4)));
+    const maxLen = Math.max(minLen + 2, Math.min(46, Number(state.config.hourly_wind_arrow_max_px ?? 26)));
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.lineWidth = (window.innerWidth < 760 ? 0.95 : 0.85) * lineSize;
     ctx.lineCap = "round";
-    ctx.shadowColor = "rgba(0,0,0,.82)";
-    ctx.shadowBlur = 4;
-    for (const p of state.windParticles) {
-      if (p.age++ > p.maxAge || p.x < -10 || p.y < -10 || p.x > canvas.width + 10 || p.y > canvas.height + 10) Object.assign(p, newWindParticle(canvas));
-      const ll = map.containerPointToLatLng([p.x, p.y]);
-      if (!isNearWindCorridor(ll.lat, ll.lng)) { Object.assign(p, newWindParticle(canvas)); continue; }
-      const wind = windVectorAt(ll.lat, ll.lng);
-      if (!wind || wind.direction_deg == null) { Object.assign(p, newWindParticle(canvas)); continue; }
-      const speed = Math.max(1, Number(wind.speed_kt || 4));
-      const motionDeg = (Number(wind.direction_deg) + 180) % 360;
-      const rad = (motionDeg - 90) * Math.PI / 180;
-      const step = Math.max(0.16, Math.min(1.75, speed * 0.045 * (window.innerWidth < 760 ? .82 : .95))) * speedMult;
-      const nx = p.x + Math.cos(rad) * step;
-      const ny = p.y + Math.sin(rad) * step;
-      const tail = Math.max(1.6, Math.min(16, (2.6 + speed * .32) * lineLength));
-      const sx = p.x - Math.cos(rad) * tail;
-      const sy = p.y - Math.sin(rad) * tail;
-      ctx.strokeStyle = hexToRgba(windSpeedColor(speed), 0.90);
-      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(nx, ny); ctx.stroke();
-      p.x = nx; p.y = ny;
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(0,0,0,.55)";
+    ctx.shadowBlur = 2;
+    for (let y = spacing * .55; y < canvas.height; y += spacing) {
+      for (let x = spacing * .55; x < canvas.width; x += spacing) {
+        const ll = map.containerPointToLatLng([x, y]);
+        if (!isNearWindCorridor(ll.lat, ll.lng)) continue;
+        const wind = windVectorAt(ll.lat, ll.lng);
+        if (!wind || wind.direction_deg == null) continue;
+        drawHourlyWindGlyph(ctx, x, y, wind);
+      }
     }
     ctx.restore();
+  }
+
+  function drawHourlyWindGlyph(ctx, x, y, wind) {
+    const speed = Math.max(0, Number(wind.speed_kt || 0));
+    const color = windSpeedColor(speed);
+    if (speed < 2) {
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, .90);
+      ctx.arc(x, y, window.innerWidth < 760 ? 1.7 : 2.0, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    // Wind direction is where wind comes from; draw motion toward where the air travels.
+    const travelDeg = (Number(wind.direction_deg) + 180) % 360;
+    const rad = (travelDeg - 90) * Math.PI / 180;
+    const g = gradientConfig("wind_speed");
+    const min = Number.isFinite(Number(g.min)) ? Number(g.min) : 0;
+    const max = Number.isFinite(Number(g.max)) ? Number(g.max) : 24;
+    const t = Math.max(0, Math.min(1, (speed - min) / (max - min || 1)));
+    const minLen = Math.max(2, Math.min(15, Number(state.config.hourly_wind_arrow_min_px ?? 4)));
+    const maxLen = Math.max(minLen + 2, Math.min(46, Number(state.config.hourly_wind_arrow_max_px ?? 26)));
+    const len = (minLen + (maxLen - minLen) * Math.sqrt(t)) * Math.max(.35, Math.min(4, Number(state.config.wind_particle_length ?? 1)));
+    const lw = Math.max(.45, Math.min(5.5, (.75 + t * 1.6) * Math.max(.25, Math.min(4, Number(state.config.wind_particle_size ?? 1)))));
+    const sx = x - Math.cos(rad) * len * .42;
+    const sy = y - Math.sin(rad) * len * .42;
+    const ex = x + Math.cos(rad) * len * .58;
+    const ey = y + Math.sin(rad) * len * .58;
+    ctx.strokeStyle = hexToRgba(color, .96);
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    const shape = String(state.config.wind_particle_shape || "spark");
+    if (shape !== "dash") {
+      const head = Math.max(3, Math.min(7, len * .24));
+      const angle = Math.PI * .78;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - Math.cos(rad - angle) * head, ey - Math.sin(rad - angle) * head);
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - Math.cos(rad + angle) * head, ey - Math.sin(rad + angle) * head);
+      ctx.stroke();
+    }
+  }
+
+  function closestWindFrameIndex(timeIso) {
+    const frames = state.windGrid?.frames || [];
+    if (!frames.length || !timeIso) return state.windFrameIndex || 0;
+    const target = new Date(timeIso).getTime();
+    let best = 0, bestD = Infinity;
+    frames.forEach((f, i) => {
+      const d = Math.abs(new Date(f.time).getTime() - target);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  }
+
+  function rebuildWindTimelineSlots() {
+    const spot = allSpots().find(s => s.id === state.selectedId);
+    const fc = spot ? forecastFor(spot.id) : null;
+    const rows = fc?.hourly || [];
+    const startHour = Math.max(0, Math.min(23, Number(state.config.hourly_wind_start_hour ?? 5)));
+    const endHour = Math.max(startHour, Math.min(23, Number(state.config.hourly_wind_end_hour ?? 21)));
+    if (!rows.length) {
+      state.windTimelineSlots = [];
+      state.windTimelineIndex = 0;
+      state.windTimelineActiveIndex = 0;
+      return;
+    }
+    const base = pacificMidnightFromIso(rows[0].time);
+    const slots = [];
+    for (let hour = startHour; hour <= endHour; hour += 1) {
+      const target = new Date(base.getTime() + hour * 3600_000);
+      const row = nearestHourly(rows, target);
+      if (row) slots.push({ hour, row, time: row.time });
+    }
+    state.windTimelineSlots = slots;
+    state.windTimelineIndex = Math.max(0, Math.min(state.windTimelineIndex, Math.max(0, slots.length - 1)));
+    const slot = slots[state.windTimelineIndex];
+    if (slot) state.windFrameIndex = closestWindFrameIndex(slot.time);
   }
 
   function startWindAnimation() {
     stopWindAnimation();
     if (!state.windPlaying) return;
-    const loop = () => {
-      if (!state.windPlaying) return;
+    rebuildWindTimelineSlots();
+    const tick = () => {
+      const slots = state.windTimelineSlots || [];
+      if (!slots.length) { renderMapTimeline(); state.windLayer?.redraw?.(); return; }
+      state.windTimelineActiveIndex = state.windTimelineIndex % slots.length;
+      const slot = slots[state.windTimelineActiveIndex];
+      state.windFrameIndex = closestWindFrameIndex(slot.time);
+      renderMapTimeline();
       state.windLayer?.redraw?.();
-      state.windRaf = requestAnimationFrame(loop);
+      state.windTimelineIndex = (state.windTimelineIndex + 1) % slots.length;
     };
-    state.windRaf = requestAnimationFrame(loop);
+    tick();
+    state.windTimer = setInterval(tick, Math.max(650, Number(state.config.hourly_wind_frame_ms ?? 1450)));
   }
 
   function stopWindAnimation() {
     if (state.windRaf) cancelAnimationFrame(state.windRaf);
     state.windRaf = 0;
+    if (state.windTimer) clearInterval(state.windTimer);
+    state.windTimer = null;
   }
 
   function setWindLayerVisible(on) {
@@ -997,12 +1076,64 @@
     if (on) {
       if (!state.map.hasLayer(state.windLayer)) state.windLayer.addTo(state.map);
       state.windPlaying = true;
-      state.windLayer.redraw?.();
       startWindAnimation();
     } else {
       if (state.map.hasLayer(state.windLayer)) state.map.removeLayer(state.windLayer);
       stopWindAnimation();
+      renderMapTimeline();
     }
+  }
+
+  function renderMapTimeline() {
+    const el = $("mapTimeline");
+    if (!el) return;
+    if (state.config.wind_layer_enabled === false) { el.hidden = true; el.innerHTML = ""; return; }
+    if (!state.windTimelineSlots?.length) rebuildWindTimelineSlots();
+    const slots = state.windTimelineSlots || [];
+    if (!slots.length) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    const activeIndex = Math.max(0, Math.min(slots.length - 1, Number(state.windTimelineActiveIndex || 0)));
+    const active = slots[activeIndex] || slots[0];
+    const tides = slots.map(s => Number(s.row?.tide_level_ft));
+    const tideMin = Math.min(...tides.filter(Number.isFinite));
+    const tideMax = Math.max(...tides.filter(Number.isFinite));
+    const tidePath = slots.map((s, i) => {
+      const x = slots.length <= 1 ? 0 : (i / (slots.length - 1) * 100);
+      const tv = Number(s.row?.tide_level_ft);
+      const y = Number.isFinite(tv) && Number.isFinite(tideMin) && Number.isFinite(tideMax) && tideMax !== tideMin ? 34 - ((tv - tideMin) / (tideMax - tideMin) * 24) : 22;
+      return `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    }).join(" ");
+    const sun = (forecastFor(state.selectedId)?.sun) || {};
+    const sunriseH = decimalPacificHour(sun.sunrise_utc);
+    const sunsetH = decimalPacificHour(sun.sunset_utc);
+    const startH = slots[0].hour, endH = slots[slots.length - 1].hour;
+    const pctForHour = h => Math.max(0, Math.min(100, ((h - startH) / (endH - startH || 1)) * 100));
+    const dayStart = Number.isFinite(sunriseH) ? pctForHour(sunriseH) : 12;
+    const dayEnd = Number.isFinite(sunsetH) ? pctForHour(sunsetH) : 86;
+    const activePct = slots.length <= 1 ? 0 : activeIndex / (slots.length - 1) * 100;
+    const hourLabel = fmtTime(active.time).replace(":00", "");
+    const activeWave = `${cleanFt(active.row?.surf_min_ft)}-${cleanFt(active.row?.surf_max_ft)}ft`;
+    const activeWind = `${active.row?.wind_speed_kt ?? "—"}kt`;
+    el.innerHTML = `
+      <div class="timeline-meta"><b>${hourLabel}</b><span>${activeWave}</span><span>${activeWind}</span><span>${cleanFt(active.row?.tide_level_ft)}ft tide</span></div>
+      <div class="timeline-track">
+        <div class="timeline-night pre" style="left:0;width:${dayStart}%"></div>
+        <div class="timeline-day" style="left:${dayStart}%;width:${Math.max(0, dayEnd - dayStart)}%"></div>
+        <div class="timeline-night post" style="left:${dayEnd}%;width:${Math.max(0, 100 - dayEnd)}%"></div>
+        <svg class="timeline-tide" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="${tidePath}"/></svg>
+        ${Number.isFinite(sunriseH) ? `<i class="sun-dot" style="left:${pctForHour(sunriseH)}%"><span>${fmtTime(sun.sunrise_utc).replace(":00","")}</span></i>` : ""}
+        ${Number.isFinite(sunsetH) ? `<i class="sun-dot dusk" style="left:${pctForHour(sunsetH)}%"><span>${fmtTime(sun.sunset_utc).replace(":00","")}</span></i>` : ""}
+        <div class="timeline-cursor" style="left:${activePct}%"></div>
+      </div>
+      <div class="timeline-hours">${slots.map((s, i) => `<span class="${i === activeIndex ? "active" : ""}">${fmtTime(s.time).replace(":00","")}</span>`).join("")}</div>`;
+  }
+
+  function decimalPacificHour(iso) {
+    if (!iso) return NaN;
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", hour12: false }).formatToParts(new Date(iso)).reduce((a, p) => (a[p.type] = p.value, a), {});
+      return Number(parts.hour) + Number(parts.minute || 0) / 60;
+    } catch (_) { return NaN; }
   }
 
   function updateWindFrameLabel() {
@@ -1080,6 +1211,11 @@
     renderSpotList();
     refreshMarkerIcons();
     renderForecast();
+    state.windTimelineIndex = 0;
+    state.windTimelineActiveIndex = 0;
+    rebuildWindTimelineSlots();
+    if (state.config.wind_layer_enabled !== false) startWindAnimation();
+    else renderMapTimeline();
     if (scrollList || state.config.auto_scroll_selected_list === true) setTimeout(() => scrollSelectedSpotIntoView(!!scrollList), 40);
     if (panMap && state.map) {
       const spot = allSpots().find(s => s.id === spotId);
@@ -1478,9 +1614,9 @@
         fetchJson(dataBase, "wave_grid_24h.json", { optional: true }),
         fetchJson(dataBase, "wind_grid_latest.json", { optional: true })
       ]);
-      const supa = await loadSupabasePublicData();
-      state.spots = (supa.spots || spots).sort((a, b) => Number(a.lat) - Number(b.lat));
-      if (supa.config) { state.config = mergeDeep(state.config, supa.config); applyConfig(state.config); }
+      // Fast first paint: use native/static JSON immediately. Supabase settings/spots
+      // are applied non-blocking below, so the app does not wait on a database roundtrip.
+      state.spots = spots.sort((a, b) => Number(b.lat) - Number(a.lat));
       state.forecasts = latest.forecasts || {};
       state.latest = latest;
       state.waveGrid = waveGrid;
@@ -1501,6 +1637,21 @@
       const first = filteredSpots().find(s => forecastFor(s.id)) || filteredSpots()[0] || activeSpots()[0];
       if (first) selectSpot(first.id, false, false);
       maybeAutoCenterOnLocation();
+
+      loadSupabasePublicData().then(supa => {
+        if (!supa || (!supa.config && !supa.spots)) return;
+        if (supa.config) { state.config = mergeDeep(state.config, supa.config); applyConfig(state.config); }
+        if (supa.spots) state.spots = supa.spots.sort((a, b) => Number(b.lat) - Number(a.lat));
+        syncRegionChips();
+        if ($("waveLayerToggle")) $("waveLayerToggle").checked = state.config.wave_layer_enabled === true;
+        if ($("windLayerToggle")) $("windLayerToggle").checked = state.config.wind_layer_enabled !== false;
+        if ($("markerColorMode")) $("markerColorMode").value = state.config.marker_color_mode || "rating";
+        drawMarkers({ fit: false });
+        renderGradientLegend();
+        renderSpotList();
+        renderForecast();
+        startWindAnimation();
+      }).catch(err => console.warn("Supabase override unavailable", err));
     } catch (err) {
       console.error(err);
       if ($("globalStatus")) $("globalStatus").textContent = "Data failed to load";

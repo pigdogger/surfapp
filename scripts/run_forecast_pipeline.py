@@ -1397,6 +1397,14 @@ def main() -> None:
     if supabase_spots:
         print(f"Loaded {len(supabase_spots)} active spots from Supabase.")
         spots = supabase_spots
+        # V2.6: write the Supabase spot list back to static JSON so the public
+        # app can load fast from one static file instead of waiting on live
+        # Supabase spot reads at startup.
+        try:
+            args.spots.write_text(json.dumps(spots, indent=2) + "\n", encoding="utf-8")
+            print(f"Synced {len(spots)} Supabase spots into {args.spots}.")
+        except Exception as exc:
+            print(f"Could not sync Supabase spots to spots.json: {type(exc).__name__}: {exc}")
     else:
         spots = static_spots
     active_spots = [s for s in spots if s.get("active", True)]
@@ -1428,7 +1436,7 @@ def main() -> None:
     args.wave_grid_out.parent.mkdir(parents=True, exist_ok=True)
     args.wave_grid_out.write_text(json.dumps(wave_grid_payload, indent=2) + "\n", encoding="utf-8")
 
-    print("Building 24-hour regional wind particle grid...")
+    print("Building 24-hour regional hourly wind-arrow grid...")
     wind_grid_payload = fetch_wind_grid_24h(generated_at)
     args.wind_grid_out.parent.mkdir(parents=True, exist_ok=True)
     args.wind_grid_out.write_text(json.dumps(wind_grid_payload, indent=2) + "\n", encoding="utf-8")
@@ -1447,7 +1455,7 @@ def main() -> None:
             "tides": "NOAA CO-OPS predictions",
             "bathymetry": "empirical California shelf/canyon/reef exposure coefficients in spots.json; NCEI CRM/ETOPO raster sampler remains the next precision upgrade",
             "wave_grid_layer": "public/data/wave_grid_24h.json generated from a WaveWatch-style marine model gateway and prepared for direct NOAA/NOMADS WaveWatch ingestion",
-            "wind_grid_layer": "public/data/wind_grid_latest.json generated from Open-Meteo 10 m wind grid for Windy-style particle rendering",
+            "wind_grid_layer": "public/data/wind_grid_latest.json generated from Open-Meteo 10 m wind grid for hourly wind-arrow rendering",
         },
         "wind_grid": {
             "file": "wind_grid_latest.json",

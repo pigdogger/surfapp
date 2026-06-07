@@ -128,17 +128,18 @@
           <label><input id="showWindArrows" type="checkbox" checked /> Wind arrows</label>
           <label><input id="waveLayerEnabled" type="checkbox" checked /> Wave map layer</label>
           <label><input id="showWaveDirectionArrows" type="checkbox" checked /> Wave-layer arrows</label>
-          <label><input id="windLayerEnabled" type="checkbox" checked /> Wind direction layer</label>
+          <label><input id="windLayerEnabled" type="checkbox" checked /> Hourly wind layer</label>
           <label>Wave height layer opacity <input id="waveLayerOpacity" type="range" min="0.1" max="0.75" step="0.05" value="0.44" /></label>
           <label>Wind layer opacity <input id="windLayerOpacity" type="range" min="0.15" max="0.95" step="0.05" value="0.7" /></label>
-          <label>Wind particle density <input id="windParticleDensity" type="range" min="0.5" max="2.5" step="0.1" value="1" /></label>
+          <label>Hourly wind density fallback <input id="windParticleDensity" type="range" min="0.5" max="2.5" step="0.1" value="1" /></label>
           <label>Wind line size <input id="windParticleSize" type="range" min="0.25" max="4" step="0.05" value="1" /></label>
           <label>Wind line length <input id="windParticleLength" type="range" min="0.35" max="4" step="0.05" value="1" /></label>
-          <label>Wind line speed <input id="windParticleSpeed" type="range" min="0.15" max="4" step="0.05" value="1" /></label>
-          <label>Wind line opacity <input id="windParticleOpacity" type="range" min="0.1" max="1" step="0.05" value="1" /></label>
-          <label>Wind line shape
-            <select id="windParticleShape"><option value="line">Line</option><option value="dash">Dash</option><option value="spark">Spark</option></select>
-          </label>
+          <label>Legacy line speed <input id="windParticleSpeed" type="range" min="0.15" max="4" step="0.05" value="1" /></label>
+          <label>Hourly wind opacity helper <input id="windParticleOpacity" type="range" min="0.1" max="1" step="0.05" value="1" /></label>
+          <label>Hourly wind frame speed <input id="hourlyWindFrameMs" type="range" min="700" max="3500" step="50" value="1450" /></label>
+          <label>Hourly wind density <input id="hourlyWindDensity" type="range" min="0.45" max="2.6" step="0.05" value="1" /></label>
+          <label>Low-wind arrow/dot size <input id="hourlyWindMinPx" type="range" min="2" max="15" step="0.5" value="4" /></label>
+          <label>High-wind arrow size <input id="hourlyWindMaxPx" type="range" min="8" max="46" step="1" value="26" /></label>
           <label>Wave arrow size <input id="waveArrowSize" type="range" min="0.45" max="2.4" step="0.05" value="1" /></label>
           <label>Wave arrow color <input id="waveArrowColor" type="color" value="#ecffff" /></label>
           <label>Wave arrow opacity <input id="waveArrowOpacity" type="range" min="0.05" max="1" step="0.05" value="0.96" /></label>
