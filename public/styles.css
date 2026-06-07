@@ -491,8 +491,9 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
   backdrop-filter: blur(6px);
   box-shadow: 0 4px 16px rgba(0,0,0,.24);
 }
-.map-card.is-map-minimized .map { min-height: 0 !important; height: 64px !important; }
+.map-card.is-map-minimized .map { min-height: 0 !important; height: 0 !important; border: 0 !important; overflow: hidden !important; }
 .map-card.is-map-minimized .map-control-strip { display: none; }
+.map-card.is-map-minimized .map-timeline { display: none !important; }
 .map-card.is-map-minimized .region-scroller { padding-bottom: 6px; }
 
 .map-gradient-legend {
@@ -638,7 +639,7 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
 }
 .wave-grid-canvas { mix-blend-mode: normal !important; }
 
-/* V2.6: desktop edge layout, no dead map space, hourly wind timeline */
+/* V2.6/V2.7: desktop edge layout, no dead map space, hourly wind timeline */
 @media (min-width: 721px) {
   .app-shell {
     width: 100%;
@@ -777,4 +778,319 @@ h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: .95; font-weig
 @media (max-width: 720px) {
   .map-minimize { bottom: 58px; }
   .map-gradient-legend { bottom: 88px; }
+}
+
+
+/* V2.7: mobile map/timeline refinement and true hourly wind-arrow UI */
+@media (max-width: 720px) {
+  .app-shell, .admin-shell { padding-top: 0; }
+  .topbar {
+    margin-bottom: 0 !important;
+    padding: max(2px, env(safe-area-inset-top)) 0 4px !important;
+  }
+  .layout { gap: 0 !important; }
+  .map-card {
+    top: 64px !important;
+    margin-top: 0 !important;
+    margin-bottom: 7px !important;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+  }
+  .map { height: clamp(158px, 44vw, 225px) !important; aspect-ratio: 21 / 9; }
+  .map-card.is-map-minimized .map {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    border: 0 !important;
+  }
+  .map-card.is-map-minimized .map-minimize {
+    position: absolute;
+    right: 7px;
+    bottom: 7px;
+  }
+  .map-gradient-legend {
+    top: 8px !important;
+    right: 7px !important;
+    bottom: auto !important;
+    transform: scale(.64) !important;
+    transform-origin: right top !important;
+    padding: 5px 5px !important;
+  }
+  .map-gradient-legend i { height: 34px !important; width: 6px !important; }
+  .map-gradient-legend span { max-width: 62px !important; }
+  .map-timeline {
+    left: 7px !important;
+    right: 7px !important;
+    bottom: 6px !important;
+    padding: 3px 6px 4px !important;
+    border-radius: 7px !important;
+  }
+  .timeline-meta {
+    font-size: .47rem !important;
+    gap: 4px !important;
+    line-height: 1.05 !important;
+  }
+  .timeline-track {
+    height: 22px !important;
+    margin-top: 2px !important;
+    border-radius: 6px !important;
+  }
+  .timeline-tide { height: 22px !important; inset: 0 0 0 !important; }
+  .timeline-tide path { stroke-width: 1.7 !important; }
+  .timeline-cursor { width: 1px !important; }
+  .timeline-yaxis {
+    position: absolute;
+    left: 2px;
+    top: 1px;
+    bottom: 1px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    z-index: 4;
+    pointer-events: none;
+    color: rgba(235,252,255,.78);
+    font-size: .39rem;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,.7);
+  }
+  .sun-dot { width: 7px !important; height: 7px !important; top: 2px !important; }
+  .timeline-hours {
+    margin-top: 2px !important;
+    font-size: .36rem !important;
+    line-height: 1 !important;
+  }
+}
+
+.timeline-yaxis {
+  position: absolute;
+  left: 3px;
+  top: 2px;
+  bottom: 2px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: rgba(235,252,255,.76);
+  font-size: .46rem;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,.75);
+  pointer-events: none;
+}
+
+/* V2.7 conventional arrows: no spark blend artifacts */
+.wind-grid-canvas { mix-blend-mode: normal !important; }
+
+
+/* V2.7: compact mobile timeline, larger open map, true closed minimized map, tide labels */
+.timeline-tide-axis {
+  position: absolute;
+  left: 4px;
+  z-index: 4;
+  color: rgba(226,249,255,.74);
+  font-size: .46rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,.65);
+  pointer-events: none;
+}
+.timeline-tide-axis.hi { top: 2px; }
+.timeline-tide-axis.lo { bottom: 2px; }
+@media (max-width: 720px) {
+  .app-shell, .admin-shell { padding-top: 0; }
+  .topbar {
+    margin-bottom: 0 !important;
+    padding-bottom: 3px !important;
+  }
+  .layout { gap: 0 !important; }
+  .map-card {
+    top: 68px !important;
+    margin-top: 0 !important;
+    margin-bottom: 8px;
+  }
+  .map { height: clamp(166px, 48vw, 228px) !important; aspect-ratio: 21 / 9; }
+  .map-card.is-map-minimized .map { height: 0 !important; min-height: 0 !important; display: block; }
+  .map-card.is-map-minimized .leaflet-control-zoom { display: none !important; }
+  .map-card.is-map-minimized .map-minimize { bottom: 7px !important; }
+  .map-card.is-map-minimized .map-gradient-legend { display: none !important; }
+  .map-timeline {
+    left: 6px;
+    right: 6px;
+    bottom: 5px;
+    padding: 3px 5px 4px;
+    border-radius: 7px;
+  }
+  .timeline-meta { font-size: .45rem; gap: 4px; line-height: 1; }
+  .timeline-meta span:nth-child(2) { display: none; }
+  .timeline-track { height: 22px; margin-top: 2px; }
+  .timeline-tide { height: 22px; inset: 1px 0 0; }
+  .timeline-tide path { stroke-width: 1.55; }
+  .timeline-cursor { width: 1.5px; transform: translateX(-.75px); }
+  .sun-dot { width: 7px; height: 7px; top: 2px; }
+  .timeline-hours { font-size: .37rem; margin-top: 2px; }
+  .timeline-tide-axis { font-size: .34rem; left: 3px; opacity: .78; }
+  .map-gradient-legend {
+    top: 7px !important;
+    right: 7px !important;
+    bottom: auto !important;
+    transform: scale(.64) !important;
+    transform-origin: right top !important;
+  }
+  .map-gradient-legend i { height: 42px; }
+  .map-minimize { bottom: 44px !important; }
+}
+
+/* V2.7: mobile timeline compression, larger sticky map, true collapse, smaller legend */
+@media (max-width: 720px) {
+  .topbar {
+    margin-bottom: 0 !important;
+    padding-bottom: 3px !important;
+  }
+  .layout {
+    gap: 0 !important;
+  }
+  .map-card {
+    top: 66px !important;
+    margin-top: 0 !important;
+    margin-bottom: 8px !important;
+  }
+  .map {
+    height: clamp(165px, 47vw, 235px) !important;
+    aspect-ratio: 21 / 9;
+  }
+  .map-card.is-map-minimized .map {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+  }
+  .map-card.is-map-minimized .leaflet-container,
+  .map-card.is-map-minimized .leaflet-pane,
+  .map-card.is-map-minimized .leaflet-control-container {
+    display: none !important;
+  }
+  .map-timeline {
+    left: 6px !important;
+    right: 6px !important;
+    bottom: 5px !important;
+    padding: 3px 5px 4px !important;
+    border-radius: 7px !important;
+  }
+  .timeline-meta {
+    font-size: .46rem !important;
+    gap: 4px !important;
+    line-height: 1.05 !important;
+  }
+  .timeline-track {
+    height: 20px !important;
+    margin-top: 2px !important;
+    border-radius: 6px !important;
+  }
+  .timeline-tide {
+    top: 1px !important;
+    height: 19px !important;
+  }
+  .timeline-tide path { stroke-width: 1.5 !important; }
+  .timeline-yaxis { font-size: .35rem !important; left: 2px !important; width: 18px !important; opacity: .82; }
+  .sun-dot { width: 7px !important; height: 7px !important; top: 2px !important; }
+  .timeline-hours {
+    margin-top: 2px !important;
+    font-size: .36rem !important;
+    line-height: 1 !important;
+  }
+  .map-minimize { bottom: 42px !important; transform: scale(.86); transform-origin: right bottom; }
+  .map-gradient-legend {
+    bottom: 73px !important;
+    right: 5px !important;
+    transform: scale(.58) !important;
+    transform-origin: right bottom !important;
+    opacity: .92;
+  }
+  .map-card.is-map-minimized .map-minimize {
+    bottom: 7px !important;
+  }
+  .spot-list {
+    max-height: min(48vh, 430px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+.timeline-yaxis {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  bottom: 2px;
+  z-index: 4;
+  width: 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: rgba(221,248,255,.76);
+  font-size: .44rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0,0,0,.55);
+}
+
+/* V2.7 final mobile refinements: compact tide timeline, larger open map, true minimized map, and visible tide axis. */
+.tide-axis {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  bottom: 2px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: rgba(226,249,255,.80);
+  font-size: .46rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,.72);
+  pointer-events: none;
+}
+@media (max-width: 720px) {
+  .app-shell, .admin-shell { padding-top: 0 !important; }
+  .topbar { margin-bottom: 0 !important; padding-bottom: 2px !important; }
+  .layout { gap: 0 !important; }
+  .map-card { top: 64px !important; margin-top: 0 !important; margin-bottom: 7px !important; }
+  .map { height: clamp(178px, 52vw, 246px) !important; aspect-ratio: 21 / 9; }
+  .map-card.is-map-minimized .map { display: none !important; height: 0 !important; min-height: 0 !important; max-height: 0 !important; }
+  .map-card.is-map-minimized .map-control-strip { display: none !important; }
+  .map-card.is-map-minimized .map-timeline { display: none !important; }
+  .map-card.is-map-minimized .leaflet-control-zoom { display: none !important; }
+  .map-card.is-map-minimized .map-gradient-legend { display: none !important; }
+  .map-card.is-map-minimized .map-minimize { bottom: 7px !important; }
+  .map-timeline {
+    left: 6px !important;
+    right: 6px !important;
+    bottom: 5px !important;
+    padding: 2px 5px 3px !important;
+    border-radius: 7px !important;
+  }
+  .timeline-meta { font-size: .43rem !important; gap: 4px !important; line-height: 1 !important; }
+  .timeline-meta span:nth-child(2) { display: none !important; }
+  .timeline-track { height: 19px !important; margin-top: 1px !important; border-radius: 6px !important; }
+  .timeline-tide { height: 19px !important; inset: 0 !important; }
+  .timeline-tide path { stroke-width: 1.45 !important; }
+  .timeline-cursor { width: 1.5px !important; transform: translateX(-.75px) !important; }
+  .sun-dot { width: 7px !important; height: 7px !important; top: 1px !important; }
+  .sun-dot span { display: block !important; top: -9px !important; font-size: .34rem !important; }
+  .timeline-hours { font-size: .34rem !important; margin-top: 1px !important; line-height: 1 !important; }
+  .tide-axis { left: 3px !important; font-size: .32rem !important; opacity: .86; }
+  .map-gradient-legend {
+    top: 7px !important;
+    right: 7px !important;
+    bottom: auto !important;
+    transform: scale(.58) !important;
+    transform-origin: right top !important;
+    padding: 4px 5px !important;
+    max-width: 76px !important;
+  }
+  .map-gradient-legend i { height: 34px !important; width: 6px !important; }
+  .map-gradient-legend span { max-width: 58px !important; }
+  .map-minimize { bottom: 40px !important; }
 }

@@ -1,4 +1,4 @@
-/* CaliSurf Light public app · west coast model V2.6 · hourly wind arrows, native settings, desktop edge layout · no build step. */
+/* CaliSurf Light public app · west coast model V2.7 · compact mobile timeline, true hourly wind arrows, corrected sun/tide timeline · no build step. */
 (() => {
   const DEFAULT_CONFIG = {
     data_base_url: "https://raw.githubusercontent.com/pigdogger/surfapp/main/public/data",
@@ -59,9 +59,9 @@
     hourly_wind_enabled: true,
     hourly_wind_start_hour: 5,
     hourly_wind_end_hour: 21,
-    hourly_wind_frame_ms: 1450,
-    hourly_wind_arrow_min_px: 4,
-    hourly_wind_arrow_max_px: 26,
+    hourly_wind_frame_ms: 2600,
+    hourly_wind_arrow_min_px: 3,
+    hourly_wind_arrow_max_px: 22,
     hourly_wind_density: 1.0,
     show_cards: { swell: true, wind: true, tide: true, sun: true, confidence: true, model: true, hourly: true, five_day: true, warnings: true },
     show_swell_arrows: true,
@@ -99,6 +99,7 @@
     windTimelineIndex: 0,
     windTimelineActiveIndex: 0,
     windTimelineSlots: [],
+    windTimelineActiveTime: null,
     wavePlaying: true,
     windPlaying: true,
     selectedId: null,
@@ -496,8 +497,12 @@
       redraw() { drawWaveLayerCanvas(this._ctx, this._canvas, this._map); }
     });
     state.waveLayer = new WaveCanvasLayer();
-    if (state.config.wave_layer_enabled !== false) state.waveLayer.addTo(state.map);
-    startWaveAnimation();
+    if (state.config.wave_layer_enabled !== false) {
+      state.waveLayer.addTo(state.map);
+      startWaveAnimation();
+    } else {
+      state.wavePlaying = false;
+    }
   }
 
   function currentWaveFrame() {
@@ -510,52 +515,53 @@
     const frame = currentWaveFrame();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!frame || !Array.isArray(frame.points) || !frame.points.length) return;
-    const opacity = Math.max(0, Math.min(0.90, Number(state.config.wave_layer_opacity ?? 0.26)));
-    const phase = (performance.now() / 1000) % 1000;
+    const opacity = Math.max(0, Math.min(0.90, Number(state.config.wave_layer_opacity ?? 0.18)));
 
-    // V2.1: render the wave layer as a continuous sampled raster, not point blobs.
-    // The layer is masked to the Pacific side of the coastline approximation so it
-    // does not paint across land.
+    // V2.7 nearshore model look: use local spot surf forecasts along the coast
+    // to draw a smooth Surfline-style coastal band. This avoids the old offshore
+    // grid/orb artifacts and keeps the visible color exactly on the ocean side of
+    // the coastline approximation. It is still an empirical visualization, not a
+    // true SWAN/nearshore raster.
     const key = [
+      "nearshore-v27",
       state.waveFrameIndex,
       canvas.width,
       canvas.height,
       Math.round(map.getZoom() * 100),
       Math.round(map.getCenter().lat * 100),
       Math.round(map.getCenter().lng * 100),
-      Math.round(opacity * 100)
+      Math.round(opacity * 100),
+      Object.keys(state.forecasts || {}).length
     ].join("|");
 
     if (!state.waveRasterCache || state.waveRasterCache.key !== key) {
-      state.waveRasterCache = { key, canvas: buildWaveRaster(frame, canvas, map, opacity) };
+      state.waveRasterCache = { key, canvas: buildNearshoreWaveRaster(frame, canvas, map, opacity) };
     }
-    if (state.waveRasterCache?.canvas) {
-      ctx.drawImage(state.waveRasterCache.canvas, 0, 0, canvas.width, canvas.height);
-    }
+    if (state.waveRasterCache?.canvas) ctx.drawImage(state.waveRasterCache.canvas, 0, 0, canvas.width, canvas.height);
 
     if (state.config.show_wave_direction_arrows === false) return;
     ctx.save();
-    ctx.globalAlpha = 0.92;
-    ctx.lineWidth = window.innerWidth < 760 ? 2.2 : 2.5;
-    ctx.shadowColor = "rgba(0,0,0,.80)";
-    ctx.shadowBlur = 3.5;
+    ctx.globalAlpha = Math.max(0.15, Math.min(1, Number(state.config.wave_arrow_opacity ?? .70)));
+    ctx.lineWidth = window.innerWidth < 760 ? 1.8 : 2.2;
+    ctx.shadowColor = "rgba(0,0,0,.72)";
+    ctx.shadowBlur = 3;
     ctx.lineCap = "round";
-    const step = window.innerWidth < 760 ? 78 : 84;
-    for (let y = step * 0.55; y < canvas.height; y += step) {
-      for (let x = step * 0.55; x < canvas.width; x += step) {
-        const ll = map.containerPointToLatLng([x, y]);
-        if (!isPacificWater(ll.lat, ll.lng, 3.9, Number(state.config.wave_nearshore_overlap ?? 0.04))) continue;
-        const wave = waveValueAt(frame, ll.lat, ll.lng);
-        if (!wave || wave.direction_deg == null) continue;
-        // Arrows stay pinned to their grid root; only direction/size change with the frame.
-        const mult = Math.max(0.45, Math.min(2.4, Number(state.config.wave_arrow_size ?? 1.0)));
-        drawWaveArrow(ctx, x, y, wave.direction_deg, Math.max(15, Math.min(30, 10 + Number(wave.height_ft || 0) * 2.5)) * mult);
-      }
+    const coast = coastlineControlPoints();
+    const step = window.innerWidth < 760 ? 5 : 7;
+    for (let i = 3; i < coast.length - 3; i += step) {
+      const lat = coast[i][0];
+      const lon = approxCoastLon(lat) - 0.10;
+      const pt = map.latLngToContainerPoint([lat, lon]);
+      if (pt.x < -20 || pt.y < -20 || pt.x > canvas.width + 20 || pt.y > canvas.height + 20) continue;
+      const wave = nearshoreWaveValueAt(lat, lon, frame);
+      if (!wave || wave.direction_deg == null) continue;
+      const mult = Math.max(0.45, Math.min(2.8, Number(state.config.wave_arrow_size ?? 1.0)));
+      drawWaveArrow(ctx, pt.x, pt.y, wave.direction_deg, Math.max(9, Math.min(26, 8 + Number(wave.height_ft || 0) * 2.0)) * mult);
     }
     ctx.restore();
   }
 
-  function buildWaveRaster(frame, canvas, map, opacity) {
+  function buildNearshoreWaveRaster(frame, canvas, map, opacity) {
     const out = document.createElement("canvas");
     out.width = Math.max(1, Math.floor(canvas.width / 2));
     out.height = Math.max(1, Math.floor(canvas.height / 2));
@@ -564,65 +570,65 @@
     const scaleX = out.width / canvas.width;
     const scaleY = out.height / canvas.height;
     const cell = window.innerWidth < 760 ? 3 : 4;
-    const scaledCellX = Math.ceil(cell * scaleX) + 3;
-    const scaledCellY = Math.ceil(cell * scaleY) + 3;
+    const sxCell = Math.ceil(cell * scaleX) + 2;
+    const syCell = Math.ceil(cell * scaleY) + 2;
+    const maxOffshore = window.innerWidth < 760 ? 0.78 : 1.05;
+    const overlap = Math.max(0, Math.min(.10, Number(state.config.wave_nearshore_overlap ?? 0.018)));
 
     for (let y = 0; y < canvas.height; y += cell) {
       for (let x = 0; x < canvas.width; x += cell) {
         const ll = map.containerPointToLatLng([x + cell * .5, y + cell * .5]);
-        if (!isPacificWater(ll.lat, ll.lng, 4.2, Number(state.config.wave_nearshore_overlap ?? 0.018))) continue;
-        const wave = waveValueAt(frame, ll.lat, ll.lng);
+        const coastLon = approxCoastLon(ll.lat);
+        const offshore = coastLon - ll.lng;
+        if (offshore < -overlap || offshore > maxOffshore) continue;
+        const wave = nearshoreWaveValueAt(ll.lat, ll.lng, frame);
         if (!wave) continue;
-        rctx.fillStyle = hexToRgba(waveColor(wave.height_ft), opacity);
-        rctx.fillRect(Math.floor(x * scaleX), Math.floor(y * scaleY), scaledCellX, scaledCellY);
+        const shoreFalloff = Math.max(0.25, 1 - offshore / maxOffshore * 0.28);
+        rctx.fillStyle = hexToRgba(waveColor(wave.height_ft * shoreFalloff), opacity);
+        rctx.fillRect(Math.floor(x * scaleX), Math.floor(y * scaleY), sxCell, syCell);
       }
     }
 
-    // Light blur removes pixel seams while preserving coastline masking better than
-    // the previous point/circle painter.
     const blur = document.createElement("canvas");
     blur.width = out.width;
     blur.height = out.height;
     const bctx = blur.getContext("2d");
-    if (bctx) {
-      bctx.filter = window.innerWidth < 760 ? "blur(3px)" : "blur(4px)";
-      bctx.drawImage(out, 0, 0);
-      bctx.filter = "none";
-      bctx.globalCompositeOperation = "destination-in";
-      drawOceanMask(bctx, blur.width, blur.height, map, scaleX, scaleY, Number(state.config.wave_nearshore_overlap ?? 0.010));
-      bctx.globalCompositeOperation = "source-over";
-      return blur;
-    }
-    return out;
+    if (!bctx) return out;
+    bctx.filter = window.innerWidth < 760 ? "blur(3px)" : "blur(5px)";
+    bctx.drawImage(out, 0, 0);
+    bctx.filter = "none";
+    bctx.globalCompositeOperation = "destination-in";
+    drawOceanMask(bctx, blur.width, blur.height, map, scaleX, scaleY, overlap);
+    bctx.globalCompositeOperation = "source-over";
+    return blur;
   }
 
-  function drawOceanMask(ctx, width, height, map, scaleX = 1, scaleY = 1, coastOffsetDeg = 0.0) {
-    if (!ctx || !map) return;
-    const bounds = map.getBounds();
-    const south = bounds.getSouth() - 0.5;
-    const north = bounds.getNorth() + 0.5;
-    const samples = 140;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, height);
-    for (let i = 0; i <= samples; i++) {
-      const lat = south + (north - south) * (i / samples);
-      const lon = approxCoastLon(lat) + coastOffsetDeg;
-      const pt = map.latLngToContainerPoint([lat, lon]);
-      ctx.lineTo(pt.x * scaleX, pt.y * scaleY);
+  function nearshoreWaveValueAt(lat, lon, frame) {
+    const spots = activeSpots();
+    let h = 0, u = 0, v = 0, wsum = 0;
+    for (const spot of spots) {
+      const fc = forecastFor(spot.id);
+      if (!fc) continue;
+      const dLat = Number(spot.lat) - Number(lat);
+      const dLon = (Number(spot.lon) - Number(lon)) * Math.cos(Number(lat) * Math.PI / 180);
+      const d2 = dLat * dLat + dLon * dLon;
+      if (d2 > 0.90) continue;
+      const maxH = Number(fc.surf_height_ft?.max ?? fc.primary_swell?.height_ft ?? 0);
+      const dir = Number(fc.primary_swell?.direction_deg ?? fc.secondary_swell?.direction_deg);
+      const w = 1 / Math.max(0.006, d2);
+      h += maxH * w;
+      if (Number.isFinite(dir)) {
+        const r = dir * Math.PI / 180;
+        u += Math.cos(r) * w;
+        v += Math.sin(r) * w;
+      }
+      wsum += w;
     }
-    ctx.closePath();
-    ctx.fillStyle = "rgba(255,255,255,1)";
-    ctx.fill();
-  }
-
-  function isPacificWater(lat, lon, offshoreDeg = 4.0, landAllowanceDeg = 0.012) {
-    lat = Number(lat); lon = Number(lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < 30.2 || lat > 42.8) return false;
-    const coast = approxCoastLon(lat);
-    // Paint very slightly under the coastline, then mask to the same coast curve after blur.
-    // This avoids a gap between color and shoreline while keeping the visible layer ocean-side.
-    return lon <= coast + landAllowanceDeg && lon >= coast - offshoreDeg;
+    if (wsum) {
+      const dir = Math.atan2(v, u) * 180 / Math.PI;
+      return { height_ft: h / wsum, direction_deg: Number.isFinite(dir) ? (dir + 360) % 360 : null };
+    }
+    return waveValueAt(frame, lat, lon);
   }
 
   function waveValueAt(frame, lat, lon) {
@@ -637,7 +643,6 @@
       const dLon = (p.lon - lon) * Math.cos((lat || p.lat) * Math.PI / 180);
       const d2 = dLat * dLat + dLon * dLon;
       if (d2 < nearestD) nearestD = d2;
-      // Small radius keeps land-side interpolation from jumping across headlands.
       if (d2 > 1.35) continue;
       const w = 1 / Math.max(0.012, d2);
       h += p.height_ft * w;
@@ -748,7 +753,11 @@
       state.wavePlaying = true;
       startWaveAnimation();
       state.waveLayer.redraw?.();
-    } else if (state.map.hasLayer(state.waveLayer)) state.map.removeLayer(state.waveLayer);
+    } else {
+      state.wavePlaying = false;
+      stopWaveAnimation();
+      if (state.map.hasLayer(state.waveLayer)) state.map.removeLayer(state.waveLayer);
+    }
   }
 
 
@@ -859,7 +868,8 @@
   }
 
   function windAnchors() {
-    const key = `${state.windFrameIndex}|${Object.keys(state.forecasts || {}).length}`;
+    const activeTime = state.windTimelineActiveTime || (state.windTimelineSlots?.[state.windTimelineActiveIndex]?.time) || "";
+    const key = `${state.windFrameIndex}|${activeTime}|${Object.keys(state.forecasts || {}).length}`;
     if (state.windAnchorCache?.key === key) return state.windAnchorCache.pts;
     const frame = currentWindFrame();
     const pts = [];
@@ -867,19 +877,20 @@
     // Model grid anchors, restricted to the coastal strip.
     for (const p of (frame?.points || [])) {
       if (isNearWindCorridor(Number(p.lat), Number(p.lon))) {
-        pts.push({ lat: Number(p.lat), lon: Number(p.lon), speed_kt: Number(p.speed_kt || 0), direction_deg: Number(p.direction_deg), source: "grid", weight: 0.80 });
+        pts.push({ lat: Number(p.lat), lon: Number(p.lon), speed_kt: Number(p.speed_kt || 0), direction_deg: Number(p.direction_deg), source: "grid", weight: 0.65 });
       }
     }
 
-    // Spot-level forecasts are more local than the coarse visual grid, so they get
-    // higher weight. This makes the wind display change near actual beaches.
+    // Spot-level hourly forecasts are the highest-fidelity nearshore wind source.
+    // Use the active timeline hour so nearby arrows actually change hour by hour.
     for (const spot of activeSpots()) {
       const fc = forecastFor(spot.id);
-      const w = fc?.wind || {};
+      const row = activeTime ? (interpolatedHourly(fc?.hourly || [], new Date(activeTime)) || nearestHourly(fc?.hourly || [], new Date(activeTime))) : null;
+      const w = row ? { speed_kt: row.wind_speed_kt, direction_deg: row.wind_direction_deg } : (fc?.wind || {});
       const speed = Number(w.speed_kt);
       const dir = Number(w.direction_deg);
       if (Number.isFinite(speed) && Number.isFinite(dir)) {
-        pts.push({ lat: Number(spot.lat), lon: Number(spot.lon), speed_kt: speed, direction_deg: dir, source: "spot", weight: 1.25 });
+        pts.push({ lat: Number(spot.lat), lon: Number(spot.lon), speed_kt: speed, direction_deg: dir, source: "spot", weight: 1.55 });
       }
     }
     const clean = pts.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Number.isFinite(p.speed_kt) && Number.isFinite(p.direction_deg));
@@ -967,45 +978,71 @@
   function drawHourlyWindGlyph(ctx, x, y, wind) {
     const speed = Math.max(0, Number(wind.speed_kt || 0));
     const color = windSpeedColor(speed);
-    if (speed < 2) {
+    const dotThreshold = Number(state.config.hourly_wind_dot_threshold ?? 2);
+    if (speed < dotThreshold) {
       ctx.beginPath();
-      ctx.fillStyle = hexToRgba(color, .90);
-      ctx.arc(x, y, window.innerWidth < 760 ? 1.7 : 2.0, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(color, .92);
+      ctx.arc(x, y, window.innerWidth < 760 ? 1.45 : 1.75, 0, Math.PI * 2);
       ctx.fill();
       return;
     }
-    // Wind direction is where wind comes from; draw motion toward where the air travels.
+
+    // Wind direction from NOAA-style feeds is the direction wind comes FROM.
+    // Draw the arrow in the direction the air is travelling: FROM + 180°.
     const travelDeg = (Number(wind.direction_deg) + 180) % 360;
     const rad = (travelDeg - 90) * Math.PI / 180;
     const g = gradientConfig("wind_speed");
     const min = Number.isFinite(Number(g.min)) ? Number(g.min) : 0;
     const max = Number.isFinite(Number(g.max)) ? Number(g.max) : 24;
     const t = Math.max(0, Math.min(1, (speed - min) / (max - min || 1)));
-    const minLen = Math.max(2, Math.min(15, Number(state.config.hourly_wind_arrow_min_px ?? 4)));
-    const maxLen = Math.max(minLen + 2, Math.min(46, Number(state.config.hourly_wind_arrow_max_px ?? 26)));
-    const len = (minLen + (maxLen - minLen) * Math.sqrt(t)) * Math.max(.35, Math.min(4, Number(state.config.wind_particle_length ?? 1)));
-    const lw = Math.max(.45, Math.min(5.5, (.75 + t * 1.6) * Math.max(.25, Math.min(4, Number(state.config.wind_particle_size ?? 1)))));
-    const sx = x - Math.cos(rad) * len * .42;
-    const sy = y - Math.sin(rad) * len * .42;
-    const ex = x + Math.cos(rad) * len * .58;
-    const ey = y + Math.sin(rad) * len * .58;
+    const minLen = Math.max(2, Math.min(15, Number(state.config.hourly_wind_arrow_min_px ?? 3)));
+    const maxLen = Math.max(minLen + 2, Math.min(42, Number(state.config.hourly_wind_arrow_max_px ?? 24)));
+    const len = (minLen + (maxLen - minLen) * Math.sqrt(t)) * Math.max(.35, Math.min(3.2, Number(state.config.wind_particle_length ?? 1)));
+    const lw = Math.max(.55, Math.min(4.2, (.62 + t * 1.15) * Math.max(.25, Math.min(3, Number(state.config.wind_particle_size ?? 1)))));
+
+    const ux = Math.cos(rad), uy = Math.sin(rad);
+    const tailX = x - ux * len * .50;
+    const tailY = y - uy * len * .50;
+    const tipX = x + ux * len * .50;
+    const tipY = y + uy * len * .50;
+    const headLen = Math.max(3.2, Math.min(8.0, len * .30));
+    const headW = Math.max(2.4, Math.min(6.2, headLen * .78));
+    const baseX = tipX - ux * headLen;
+    const baseY = tipY - uy * headLen;
+    const px = -uy, py = ux;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    // subtle outline keeps arrows readable on bathymetry and land
+    ctx.strokeStyle = "rgba(2,8,12,.55)";
+    ctx.lineWidth = lw + 1.1;
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(baseX, baseY);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(2,8,12,.55)";
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(baseX + px * headW, baseY + py * headW);
+    ctx.lineTo(baseX - px * headW, baseY - py * headW);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.strokeStyle = hexToRgba(color, .96);
     ctx.lineWidth = lw;
     ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(baseX, baseY);
     ctx.stroke();
-    const shape = String(state.config.wind_particle_shape || "spark");
-    if (shape !== "dash") {
-      const head = Math.max(3, Math.min(7, len * .24));
-      const angle = Math.PI * .78;
-      ctx.beginPath();
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(ex - Math.cos(rad - angle) * head, ey - Math.sin(rad - angle) * head);
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(ex - Math.cos(rad + angle) * head, ey - Math.sin(rad + angle) * head);
-      ctx.stroke();
-    }
+    ctx.fillStyle = hexToRgba(color, .98);
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(baseX + px * headW, baseY + py * headW);
+    ctx.lineTo(baseX - px * headW, baseY - py * headW);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   function closestWindFrameIndex(timeIso) {
@@ -1018,6 +1055,66 @@
       if (d < bestD) { bestD = d; best = i; }
     });
     return best;
+  }
+
+
+
+  function interpolateAngleDeg(a, b, t) {
+    a = Number(a); b = Number(b); t = Math.max(0, Math.min(1, Number(t) || 0));
+    if (!Number.isFinite(a)) return Number.isFinite(b) ? b : null;
+    if (!Number.isFinite(b)) return a;
+    const ar = (270 - a) * Math.PI / 180;
+    const br = (270 - b) * Math.PI / 180;
+    const ux = Math.cos(ar) * (1 - t) + Math.cos(br) * t;
+    const vy = Math.sin(ar) * (1 - t) + Math.sin(br) * t;
+    return (270 - Math.atan2(vy, ux) * 180 / Math.PI + 360) % 360;
+  }
+
+  function interpolatedHourly(rows, targetDate) {
+    if (!Array.isArray(rows) || !rows.length || !targetDate) return null;
+    const target = targetDate instanceof Date ? targetDate.getTime() : new Date(targetDate).getTime();
+    const sorted = [...rows].filter(r => r?.time).sort((a, b) => new Date(a.time) - new Date(b.time));
+    if (!sorted.length || !Number.isFinite(target)) return null;
+    if (target <= new Date(sorted[0].time).getTime()) return { ...sorted[0], time: new Date(target).toISOString(), _source_time: sorted[0].time };
+    const last = sorted[sorted.length - 1];
+    if (target >= new Date(last.time).getTime()) return { ...last, time: new Date(target).toISOString(), _source_time: last.time };
+    for (let i = 1; i < sorted.length; i++) {
+      const a = sorted[i - 1], b = sorted[i];
+      const at = new Date(a.time).getTime(), bt = new Date(b.time).getTime();
+      if (at <= target && target <= bt) {
+        const f = (target - at) / (bt - at || 1);
+        const lerp = (ka, kb = ka) => {
+          const av = Number(a[ka]), bv = Number(b[kb]);
+          if (!Number.isFinite(av)) return Number.isFinite(bv) ? bv : null;
+          if (!Number.isFinite(bv)) return av;
+          return av + (bv - av) * f;
+        };
+        return {
+          ...a,
+          time: new Date(target).toISOString(),
+          surf_min_ft: lerp('surf_min_ft'),
+          surf_max_ft: lerp('surf_max_ft'),
+          wind_speed_kt: lerp('wind_speed_kt'),
+          wind_direction_deg: interpolateAngleDeg(a.wind_direction_deg, b.wind_direction_deg, f),
+          tide_level_ft: lerp('tide_level_ft'),
+          tide_trend: Number(b.tide_level_ft) > Number(a.tide_level_ft) ? 'rising' : 'falling',
+          _source_time: `${a.time}→${b.time}`
+        };
+      }
+    }
+    return nearestHourly(sorted, new Date(target));
+  }
+
+  function activeTimelineTime() {
+    const slots = state.windTimelineSlots || [];
+    const active = slots[Math.max(0, Math.min(slots.length - 1, Number(state.windTimelineActiveIndex || 0)))] || slots[0];
+    return active?.time || null;
+  }
+  function activeWindTimelineSlot() {
+    const slots = state.windTimelineSlots || [];
+    if (!slots.length) return null;
+    const i = Math.max(0, Math.min(slots.length - 1, Number(state.windTimelineActiveIndex || 0)));
+    return slots[i] || slots[0];
   }
 
   function rebuildWindTimelineSlots() {
@@ -1036,13 +1133,13 @@
     const slots = [];
     for (let hour = startHour; hour <= endHour; hour += 1) {
       const target = new Date(base.getTime() + hour * 3600_000);
-      const row = nearestHourly(rows, target);
-      if (row) slots.push({ hour, row, time: row.time });
+      const row = interpolatedHourly(rows, target) || nearestHourly(rows, target);
+      if (row) slots.push({ hour, row, time: target.toISOString(), targetTime: target.toISOString() });
     }
     state.windTimelineSlots = slots;
     state.windTimelineIndex = Math.max(0, Math.min(state.windTimelineIndex, Math.max(0, slots.length - 1)));
     const slot = slots[state.windTimelineIndex];
-    if (slot) state.windFrameIndex = closestWindFrameIndex(slot.time);
+    if (slot) { state.windTimelineActiveTime = slot.time; state.windFrameIndex = closestWindFrameIndex(slot.time); }
   }
 
   function startWindAnimation() {
@@ -1054,13 +1151,15 @@
       if (!slots.length) { renderMapTimeline(); state.windLayer?.redraw?.(); return; }
       state.windTimelineActiveIndex = state.windTimelineIndex % slots.length;
       const slot = slots[state.windTimelineActiveIndex];
+      state.windTimelineActiveTime = slot?.time || null;
       state.windFrameIndex = closestWindFrameIndex(slot.time);
+      state.windAnchorCache = null;
       renderMapTimeline();
       state.windLayer?.redraw?.();
       state.windTimelineIndex = (state.windTimelineIndex + 1) % slots.length;
     };
     tick();
-    state.windTimer = setInterval(tick, Math.max(650, Number(state.config.hourly_wind_frame_ms ?? 1450)));
+    state.windTimer = setInterval(tick, Math.max(1600, Number(state.config.hourly_wind_frame_ms ?? 2800)));
   }
 
   function stopWindAnimation() {
@@ -1080,6 +1179,7 @@
     } else {
       if (state.map.hasLayer(state.windLayer)) state.map.removeLayer(state.windLayer);
       stopWindAnimation();
+      state.windTimelineActiveTime = null;
       renderMapTimeline();
     }
   }
@@ -1094,46 +1194,161 @@
     el.hidden = false;
     const activeIndex = Math.max(0, Math.min(slots.length - 1, Number(state.windTimelineActiveIndex || 0)));
     const active = slots[activeIndex] || slots[0];
-    const tides = slots.map(s => Number(s.row?.tide_level_ft));
-    const tideMin = Math.min(...tides.filter(Number.isFinite));
-    const tideMax = Math.max(...tides.filter(Number.isFinite));
+    const tideVals = slots.map(s => Number(s.row?.tide_level_ft)).filter(Number.isFinite);
+    const tideMin = tideVals.length ? Math.min(...tideVals) : 0;
+    const tideMax = tideVals.length ? Math.max(...tideVals) : 1;
     const tidePath = slots.map((s, i) => {
       const x = slots.length <= 1 ? 0 : (i / (slots.length - 1) * 100);
       const tv = Number(s.row?.tide_level_ft);
-      const y = Number.isFinite(tv) && Number.isFinite(tideMin) && Number.isFinite(tideMax) && tideMax !== tideMin ? 34 - ((tv - tideMin) / (tideMax - tideMin) * 24) : 22;
+      const y = Number.isFinite(tv) && tideMax !== tideMin ? 30 - ((tv - tideMin) / (tideMax - tideMin) * 21) : 20;
       return `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
     }).join(" ");
-    const sun = (forecastFor(state.selectedId)?.sun) || {};
-    const sunriseH = decimalPacificHour(sun.sunrise_utc);
-    const sunsetH = decimalPacificHour(sun.sunset_utc);
+    const fcSun = (forecastFor(state.selectedId)?.sun) || {};
+    const selectedSpot = allSpots().find(s => s.id === state.selectedId);
+    const computedSun = selectedSpot ? computedSunForSpot(selectedSpot, slots[0]?.time) : null;
+    const sunriseH = Number.isFinite(computedSun?.sunriseH) ? computedSun.sunriseH : decimalPacificHour(fcSun.sunrise_utc);
+    const sunsetH = Number.isFinite(computedSun?.sunsetH) ? computedSun.sunsetH : decimalPacificHour(fcSun.sunset_utc);
+    const sunriseLabel = computedSun?.sunriseMs ? fmtTime(computedSun.sunriseMs) : fmtTime(fcSun.sunrise_utc).replace(":00", "");
+    const sunsetLabel = computedSun?.sunsetMs ? fmtTime(computedSun.sunsetMs) : fmtTime(fcSun.sunset_utc).replace(":00", "");
     const startH = slots[0].hour, endH = slots[slots.length - 1].hour;
     const pctForHour = h => Math.max(0, Math.min(100, ((h - startH) / (endH - startH || 1)) * 100));
     const dayStart = Number.isFinite(sunriseH) ? pctForHour(sunriseH) : 12;
     const dayEnd = Number.isFinite(sunsetH) ? pctForHour(sunsetH) : 86;
     const activePct = slots.length <= 1 ? 0 : activeIndex / (slots.length - 1) * 100;
-    const hourLabel = fmtTime(active.time).replace(":00", "");
+    const hourLabel = fmtTimelineHour(active.hour);
     const activeWave = `${cleanFt(active.row?.surf_min_ft)}-${cleanFt(active.row?.surf_max_ft)}ft`;
-    const activeWind = `${active.row?.wind_speed_kt ?? "—"}kt`;
+    const activeWind = `${cleanFt(active.row?.wind_speed_kt)}kt`;
+    const activeTide = `${cleanFt(active.row?.tide_level_ft)}ft tide`;
     el.innerHTML = `
-      <div class="timeline-meta"><b>${hourLabel}</b><span>${activeWave}</span><span>${activeWind}</span><span>${cleanFt(active.row?.tide_level_ft)}ft tide</span></div>
+      <div class="timeline-meta"><b>${hourLabel}</b><span>${activeWave}</span><span>${activeWind}</span><span>${activeTide}</span></div>
       <div class="timeline-track">
         <div class="timeline-night pre" style="left:0;width:${dayStart}%"></div>
         <div class="timeline-day" style="left:${dayStart}%;width:${Math.max(0, dayEnd - dayStart)}%"></div>
         <div class="timeline-night post" style="left:${dayEnd}%;width:${Math.max(0, 100 - dayEnd)}%"></div>
-        <svg class="timeline-tide" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="${tidePath}"/></svg>
-        ${Number.isFinite(sunriseH) ? `<i class="sun-dot" style="left:${pctForHour(sunriseH)}%"><span>${fmtTime(sun.sunrise_utc).replace(":00","")}</span></i>` : ""}
-        ${Number.isFinite(sunsetH) ? `<i class="sun-dot dusk" style="left:${pctForHour(sunsetH)}%"><span>${fmtTime(sun.sunset_utc).replace(":00","")}</span></i>` : ""}
+        <div class="timeline-yaxis"><span>${cleanFt(tideMax)}</span><span>${cleanFt((tideMin+tideMax)/2)}</span><span>${cleanFt(tideMin)}</span></div>
+        <svg class="timeline-tide" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path d="${tidePath}"/></svg>
+        ${Number.isFinite(sunriseH) ? `<i class="sun-dot" style="left:${pctForHour(sunriseH)}%"><span>${sunriseLabel}</span></i>` : ""}
+        ${Number.isFinite(sunsetH) ? `<i class="sun-dot dusk" style="left:${pctForHour(sunsetH)}%"><span>${sunsetLabel}</span></i>` : ""}
         <div class="timeline-cursor" style="left:${activePct}%"></div>
       </div>
-      <div class="timeline-hours">${slots.map((s, i) => `<span class="${i === activeIndex ? "active" : ""}">${fmtTime(s.time).replace(":00","")}</span>`).join("")}</div>`;
+      <div class="timeline-hours">${slots.map((s, i) => `<span class="${i === activeIndex ? "active" : ""}">${fmtTimelineHour(s.hour)}</span>`).join("")}</div>`;
   }
 
-  function decimalPacificHour(iso) {
+  function fmtTimelineHour(hour) {
+    const h = Number(hour);
+    if (!Number.isFinite(h)) return "—";
+    const hr = ((h % 24) + 24) % 24;
+    const ap = hr >= 12 ? "PM" : "AM";
+    const v = hr % 12 || 12;
+    return `${v} ${ap}`;
+  }
+
+  function interpolatedTimelineRow(rows, targetDate) {
+    if (!rows?.length) return null;
+    const target = targetDate.getTime();
+    const sorted = rows.slice().filter(r => r?.time).sort((a, b) => new Date(a.time) - new Date(b.time));
+    if (!sorted.length) return null;
+    let before = sorted[0], after = sorted[sorted.length - 1];
+    for (let i = 0; i < sorted.length; i++) {
+      const t = new Date(sorted[i].time).getTime();
+      if (t <= target) before = sorted[i];
+      if (t >= target) { after = sorted[i]; break; }
+    }
+    const t0 = new Date(before.time).getTime();
+    const t1 = new Date(after.time).getTime();
+    if (!Number.isFinite(t0) || !Number.isFinite(t1) || t0 === t1) return { ...nearestHourly(rows, targetDate), time: targetDate.toISOString() };
+    const r = Math.max(0, Math.min(1, (target - t0) / (t1 - t0)));
+    const lerp = (a, b) => {
+      const aa = Number(a), bb = Number(b);
+      if (Number.isFinite(aa) && Number.isFinite(bb)) return aa + (bb - aa) * r;
+      return Number.isFinite(aa) ? aa : (Number.isFinite(bb) ? bb : undefined);
+    };
+    const dirLerp = (a, b) => {
+      const aa = Number(a), bb = Number(b);
+      if (!Number.isFinite(aa) || !Number.isFinite(bb)) return Number.isFinite(aa) ? aa : bb;
+      let d = ((bb - aa + 540) % 360) - 180;
+      return (aa + d * r + 360) % 360;
+    };
+    const nr = nearestHourly(rows, targetDate) || before;
+    return {
+      ...nr,
+      time: targetDate.toISOString(),
+      surf_min_ft: Math.round((lerp(before.surf_min_ft, after.surf_min_ft) || 0) * 2) / 2,
+      surf_max_ft: Math.round((lerp(before.surf_max_ft, after.surf_max_ft) || 0) * 2) / 2,
+      wind_speed_kt: Math.round((lerp(before.wind_speed_kt, after.wind_speed_kt) || 0) * 10) / 10,
+      wind_direction_deg: Math.round(dirLerp(before.wind_direction_deg, after.wind_direction_deg)),
+      tide_level_ft: Math.round((lerp(before.tide_level_ft, after.tide_level_ft) || 0) * 100) / 100,
+      tide_trend: nr.tide_trend || before.tide_trend || after.tide_trend,
+      wind_quality: nr.wind_quality || before.wind_quality || after.wind_quality
+    };
+  }
+
+  function computedSunForSpot(spot, referenceIso) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(referenceIso || Date.now())).reduce((a, p) => (a[p.type] = p.value, a), {});
+      const date = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+      const rise = sunCalcUtcMs(date, Number(spot.lat), Number(spot.lon), true);
+      const set = sunCalcUtcMs(date, Number(spot.lat), Number(spot.lon), false);
+      return {
+        sunriseMs: rise,
+        sunsetMs: set,
+        sunriseH: decimalPacificHour(rise),
+        sunsetH: decimalPacificHour(set)
+      };
+    } catch (_) { return null; }
+  }
+
+  function dayOfYear(date) {
+    const start = new Date(date.getFullYear(), 0, 0);
+    return Math.floor((date - start) / 86400000);
+  }
+  function norm360(x) { return (x % 360 + 360) % 360; }
+  function sunCalcUtcMs(date, lat, lon, isRise) {
+    const zenith = 90.833;
+    const N = dayOfYear(date);
+    const lngHour = lon / 15;
+    const t = N + ((isRise ? 6 : 18) - lngHour) / 24;
+    const M = .9856 * t - 3.289;
+    const L = norm360(M + 1.916 * Math.sin(M * Math.PI / 180) + .020 * Math.sin(2 * M * Math.PI / 180) + 282.634);
+    let RA = Math.atan(.91764 * Math.tan(L * Math.PI / 180)) * 180 / Math.PI;
+    RA = norm360(RA);
+    RA += (Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90);
+    RA /= 15;
+    const sinDec = .39782 * Math.sin(L * Math.PI / 180);
+    const cosDec = Math.cos(Math.asin(sinDec));
+    const cosH = (Math.cos(zenith * Math.PI / 180) - sinDec * Math.sin(lat * Math.PI / 180)) / (cosDec * Math.cos(lat * Math.PI / 180));
+    if (cosH > 1 || cosH < -1) return null;
+    let H = isRise ? 360 - Math.acos(cosH) * 180 / Math.PI : Math.acos(cosH) * 180 / Math.PI;
+    H /= 15;
+    const T = H + RA - .06571 * t - 6.622;
+    const UT = (T - lngHour + 24) % 24;
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0) + UT * 3600000;
+  }
+
+  function decimalPacificHour(iso, label) {
+    // Prefer the preformatted local label when present because some APIs store
+    // sunset in UTC on the previous/next calendar date even though the local
+    // clock time is correct.
+    const fromLabel = decimalHourFromLabel(label);
+    if (Number.isFinite(fromLabel)) return fromLabel;
     if (!iso) return NaN;
     try {
       const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", hour12: false }).formatToParts(new Date(iso)).reduce((a, p) => (a[p.type] = p.value, a), {});
       return Number(parts.hour) + Number(parts.minute || 0) / 60;
     } catch (_) { return NaN; }
+  }
+
+  function decimalHourFromLabel(label) {
+    if (!label) return NaN;
+    const m = String(label).match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
+    if (!m) return NaN;
+    let h = Number(m[1]);
+    const min = Number(m[2] || 0);
+    const ap = m[3]?.toLowerCase();
+    if (ap === "pm" && h < 12) h += 12;
+    if (ap === "am" && h === 12) h = 0;
+    if (Number.isFinite(h) && Number.isFinite(min)) return h + min / 60;
+    return NaN;
   }
 
   function updateWindFrameLabel() {
@@ -1282,7 +1497,7 @@
     }
     if (show.wind !== false) cards.push(card("Wind", `<div class="arrow-row">${arrowSvg(wind.direction_deg, state.config.show_wind_arrows !== false, windSpeedColor(wind.speed_kt))}<span>${wind.direction_compass || "—"} ${wind.speed_kt ?? "—"} kt</span></div>`, `Gust ${wind.gust_kt ?? "—"} kt · ${escapeHtml(wind.quality || "unknown")} · ${escapeHtml(wind.source || "model")}`));
     if (show.tide !== false) cards.push(card("Tide", `${tide.level_ft ?? "—"} ft`, `${escapeHtml(tide.trend || "unknown")} · ${escapeHtml(tide.station_name || "NOAA CO-OPS")}`));
-    if (show.sun !== false) cards.push(card("Sun", `${fmtTime(sun.sunrise_utc)} / ${fmtTime(sun.sunset_utc)}`, "sunrise / sunset · Pacific time"));
+    if (show.sun !== false) { const calcSun = computedSunForSpot(spot, fc.last_updated || fc.hourly?.[0]?.time); cards.push(card("Sun", `${fmtTime(calcSun?.sunriseMs || sun.sunrise_utc)} / ${fmtTime(calcSun?.sunsetMs || sun.sunset_utc)}`, "sunrise / sunset · Pacific time")); }
     if (show.confidence !== false) cards.push(card("Confidence", `${Math.round((fc.confidence || 0) * 100)}%`, `${escapeHtml(fc.best_window || "—")} · ${escapeHtml(fc.rating || "unknown")}`));
     if (show.model !== false) cards.push(card("Why this call", escapeHtml(notes.callout || "—"), `Exposure ${notes.transform?.directional_exposure ?? "—"} · bathy gain ${notes.transform?.bathymetry_gain ?? "—"}`, "full"));
     if (show.hourly !== false) cards.push(`<article class="info-card full"><div class="kicker">48 hour snapshots</div>${renderThirtyNineHourSnapshots(fc.hourly || [], spot)}</article>`);
@@ -1313,6 +1528,44 @@
     const highs = usable.map(r => Number(r.surf_max_ft)).filter(Number.isFinite);
     if (!lows.length || !highs.length) return fc?.surf_height_ft?.human || "";
     return `${cleanFt(Math.min(...lows))}-${cleanFt(Math.max(...highs))} ft`;
+  }
+
+
+  function interpolatedHourly(rows, targetDate) {
+    if (!rows || !rows.length || !targetDate) return null;
+    const sorted = [...rows].sort((a, b) => new Date(a.time) - new Date(b.time));
+    const t = targetDate.getTime();
+    if (t <= new Date(sorted[0].time).getTime()) return { ...sorted[0], time: targetDate.toISOString() };
+    if (t >= new Date(sorted[sorted.length - 1].time).getTime()) return { ...sorted[sorted.length - 1], time: targetDate.toISOString() };
+    for (let i = 1; i < sorted.length; i++) {
+      const a = sorted[i - 1], b = sorted[i];
+      const ta = new Date(a.time).getTime(), tb = new Date(b.time).getTime();
+      if (ta <= t && t <= tb) {
+        const r = (t - ta) / (tb - ta || 1);
+        const lerp = (ka, kb) => {
+          const av = Number(a[ka]), bv = Number(b[kb || ka]);
+          return Number.isFinite(av) && Number.isFinite(bv) ? +(av + (bv - av) * r).toFixed(2) : (Number.isFinite(av) ? av : (Number.isFinite(bv) ? bv : null));
+        };
+        const dir = interpolateDirection(Number(a.wind_direction_deg), Number(b.wind_direction_deg), r);
+        return {
+          ...a,
+          time: targetDate.toISOString(),
+          surf_min_ft: lerp("surf_min_ft"),
+          surf_max_ft: lerp("surf_max_ft"),
+          wind_speed_kt: lerp("wind_speed_kt"),
+          wind_direction_deg: Number.isFinite(dir) ? Math.round(dir) : a.wind_direction_deg,
+          tide_level_ft: lerp("tide_level_ft"),
+          tide_trend: Number(b.tide_level_ft) >= Number(a.tide_level_ft) ? "rising" : "falling"
+        };
+      }
+    }
+    return nearestHourly(sorted, targetDate);
+  }
+
+  function interpolateDirection(a, b, r) {
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.isFinite(a) ? a : b;
+    let d = ((b - a + 540) % 360) - 180;
+    return (a + d * r + 360) % 360;
   }
 
   function nearestHourly(rows, targetDate) {

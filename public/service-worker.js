@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'calisurf-light-pwa-v26-hourly-wind-timeline-2026-06-07';
+const CACHE_VERSION = 'calisurf-light-pwa-v27-mobile-wind-timeline-2026-06-07';
 const APP_SHELL = [
   './',
   './index.html',

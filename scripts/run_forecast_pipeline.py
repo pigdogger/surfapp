@@ -743,13 +743,25 @@ def sun_time_utc(date: dt.datetime, lat: float, lon: float, is_rise: bool) -> Op
     local_mean = h + ra - (0.06571 * t) - 6.622
     utc_hour = (local_mean - lng_hour) % 24
     midnight = dt.datetime(date.year, date.month, date.day, tzinfo=UTC)
-    return midnight + dt.timedelta(hours=utc_hour)
+    result = midnight + dt.timedelta(hours=utc_hour)
+    # For the US West Coast, local sunset occurs in the evening but is represented
+    # as the following UTC day (roughly 02:00-04:00Z). The basic NOAA sunrise
+    # algorithm returns only a modulo-24 hour, so push sunsets that land before
+    # noon UTC into the next UTC day. This keeps map daylight/tide timelines aligned
+    # with the actual Pacific sunset instead of placing it near the wrong evening.
+    if not is_rise and utc_hour < 12:
+        result += dt.timedelta(days=1)
+    return result
 
 
 def local_pacific_time_string(t: Optional[dt.datetime]) -> str:
     if not t:
         return "—"
-    return t.strftime("%H:%M UTC")
+    try:
+        from zoneinfo import ZoneInfo
+        return t.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%-I:%M %p")
+    except Exception:
+        return t.strftime("%H:%M UTC")
 
 
 # ---------------------------------------------------------------------------
@@ -1123,13 +1135,14 @@ def california_wave_grid_points() -> List[Dict[str, float]]:
     interpolate a continuous color map instead of drawing disconnected blobs.
     """
     pts: List[Dict[str, float]] = []
-    for lat in frange(30.5, 42.5, 0.35):
+    # Denser cross-shore sampling near the shoreline gives the optional wave
+    # layer a more Surfline-like nearshore shape. This is still a lightweight
+    # model gateway, not a full SWAN/bathymetry solve.
+    offsets = [-3.2, -2.6, -2.05, -1.55, -1.15, -0.82, -0.58, -0.40, -0.27, -0.17, -0.09, -0.035, 0.006]
+    for lat in frange(30.5, 42.5, 0.22):
         coast = approx_coast_lon(lat)
-        # Wave field intentionally overlaps the shoreline slightly; the browser
-        # clips the rendered raster to the coastline curve so the final color hugs
-        # shore without visibly painting inland.
-        for lon in frange(coast - 3.7, coast + 0.01, 0.30):
-            pts.append({"lat": round(lat, 4), "lon": round(lon, 4)})
+        for off in offsets:
+            pts.append({"lat": round(lat, 4), "lon": round(coast + off, 4)})
     return pts
 
 
@@ -1153,7 +1166,7 @@ def synthetic_wave_grid(generated_at: dt.datetime, status: str = "wave_grid:fall
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v2.5",
+        "model": "calisurf-wave-grid-v2.7",
         "source": status,
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
@@ -1225,8 +1238,8 @@ def fetch_wave_grid_24h(generated_at: dt.datetime) -> Dict[str, Any]:
     return {
         "generated_at": to_iso(generated_at),
         "valid_for_hours": WAVE_GRID_HOURS,
-        "model": "calisurf-wave-grid-v2.5",
-        "source": "NOAA/NCEP WaveWatch-style marine model gateway via Open-Meteo, with WaveWatch/NOMADS-ready pipeline hooks; drawn client-side as optional semitransparent coastline-clipped wave-height colorization",
+        "model": "calisurf-wave-grid-v2.7",
+        "source": "NOAA/NCEP WaveWatch-style marine model gateway via Open-Meteo, with WaveWatch/SWAN-ready pipeline hooks; drawn client-side as optional semitransparent coastline-clipped wave-height colorization",
         "units": {"height": "ft", "direction": "degrees true, waves come from this direction"},
         "bbox": {"lat_min": 30.5, "lat_max": 42.5, "lon_min": -128.5, "lon_max": -116.8},
         "frames": frames,
