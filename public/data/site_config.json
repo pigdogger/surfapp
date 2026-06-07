@@ -33,7 +33,7 @@
     "app_title": "CaliSurf Light",
     "refresh_prefix": "model refresh:",
     "install_label": "Install app",
-    "search_placeholder": "Search surf spots…"
+    "search_placeholder": "Search surf spots\u2026"
   },
   "typography": {
     "family": "Raleway, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
